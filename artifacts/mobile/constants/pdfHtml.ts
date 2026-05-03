@@ -39,6 +39,11 @@ select.form-field{padding:0 2px}
 @keyframes ripple{0%{opacity:1;transform:translate(-18px,-18px) scale(.5)}100%{opacity:0;transform:translate(-18px,-18px) scale(2.5)}}
 .snap-rect{position:absolute;pointer-events:none;z-index:10;border:1.5px dashed rgba(59,130,246,.85);background:rgba(59,130,246,.08);border-radius:2px}
 .txt-overlay{position:absolute;z-index:25;background:rgba(255,255,255,.93);border:1.5px solid #3B82F6;border-radius:4px;padding:3px 6px;font-size:13px;color:#111;outline:none;min-width:80px;min-height:24px;resize:both;overflow:auto;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.sel-handle{position:absolute;z-index:50;width:24px;height:24px;border-radius:50%;background:#3B82F6;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);cursor:ew-resize;transform:translate(-12px,-12px);touch-action:none;user-select:none;transition:transform .12s}
+.sel-handle:active{transform:translate(-12px,-12px) scale(1.35)}
+.sel-toolbar{position:absolute;z-index:55;background:rgba(10,13,26,.93);border-radius:11px;padding:5px 7px;display:flex;gap:5px;align-items:center;box-shadow:0 4px 20px rgba(0,0,0,.6);white-space:nowrap;transform:translateX(-50%);pointer-events:auto}
+.sel-btn{border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#fff;font-family:-apple-system,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+.sel-btn.confirm{background:#3B82F6}.sel-btn.cancel{background:rgba(255,255,255,.2)}
 #err{display:none;position:fixed;inset:0;background:${bg};flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#EF4444;text-align:center;padding:28px;font-size:14px}
 .err-icon{font-size:36px;margin-bottom:4px}
 #pwd-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center}
@@ -92,6 +97,33 @@ var viewMode='continuous';
 var pwdCb=null;
 var globalUndoStack=[];  // [{page, data}] state BEFORE each op
 var MAX_UNDO=20;
+var selectionState=null; // {n,cv,cssW,cssH,x1,y1,x2,y2,snapshot,wrap,handleLeft,handleRight}
+var selDrag=null;        // {side,startClientX,startSelX}
+
+// ── Selection handle global drag listeners ──────────────────────────────────
+document.addEventListener('touchmove',function(e){
+  if(!selDrag||!selectionState)return;
+  e.preventDefault();
+  var dx=e.touches[0].clientX-selDrag.startClientX;
+  var r=selectionState.cv.getBoundingClientRect();
+  var cssPerPx=selectionState.cssW/r.width;
+  var newX=selDrag.startSelX+dx*cssPerPx;
+  if(selDrag.side==='left') selectionState.x1=Math.min(newX,selectionState.x2-10);
+  else selectionState.x2=Math.max(newX,selectionState.x1+10);
+  drawSnapPreview(); updateHandlePositions();
+},{passive:false});
+document.addEventListener('mousemove',function(e){
+  if(!selDrag||!selectionState)return;
+  var dx=e.clientX-selDrag.startClientX;
+  var r=selectionState.cv.getBoundingClientRect();
+  var cssPerPx=selectionState.cssW/r.width;
+  var newX=selDrag.startSelX+dx*cssPerPx;
+  if(selDrag.side==='left') selectionState.x1=Math.min(newX,selectionState.x2-10);
+  else selectionState.x2=Math.max(newX,selectionState.x1+10);
+  drawSnapPreview(); updateHandlePositions();
+});
+document.addEventListener('touchend',function(){selDrag=null;},{passive:true});
+document.addEventListener('mouseup',function(){selDrag=null;});
 
 // ── Bridge ─────────────────────────────────────────────────────────────────
 function rn(data){
@@ -136,6 +168,7 @@ document.addEventListener('message',function(e){ recv(e.data); });
 var CURSORS={none:'default',draw:'crosshair',highlight:'text',underline:'text',
   strikethrough:'text',eraser:'cell',shape:'crosshair',textbox:'text',stamp:'copy'};
 function setTool(v){
+  clearSelectionUI();
   tool=v;
   var cur=CURSORS[v]||'crosshair';
   document.querySelectorAll('.ann-cv').forEach(function(c){
@@ -536,7 +569,9 @@ function mergeWordsIntoLines(words){
   return lines; // [{x, r, y, h}]
 }
 
-function commitSnap(n,cv,cssW,cssH,x1,y1,x2,y2){
+// Shared drawing core — used by both preview (drawSnapPreview) and commit.
+// Returns merged line rects so callers can position handles.
+function drawSnapCore(n,cv,cssW,cssH,x1,y1,x2,y2){
   var items=textIndex[n]||[];
   var minX=Math.min(x1,x2)-4, maxX=Math.max(x1,x2)+4;
   var minY=Math.min(y1,y2)-8, maxY=Math.max(y1,y2)+8;
@@ -547,9 +582,8 @@ function commitSnap(n,cv,cssW,cssH,x1,y1,x2,y2){
   var sx=cv.width/cssW, sy=cv.height/cssH;
   ctx.save();
   ctx.strokeStyle=drawColor; ctx.fillStyle=drawColor;
-
+  var retLines=null;
   if(matched.length===0){
-    // No text under selection — fall back to freehand rect / line
     if(tool==='highlight'){
       ctx.globalAlpha=0.38;
       ctx.fillRect(minX*sx,minY*sy,(maxX-minX)*sx,(maxY-minY)*sy);
@@ -559,28 +593,132 @@ function commitSnap(n,cv,cssW,cssH,x1,y1,x2,y2){
       ctx.beginPath(); ctx.moveTo(minX*sx,fallY); ctx.lineTo(maxX*sx,fallY); ctx.stroke();
     }
   } else {
-    // Merge words into per-line bounding boxes → clean phrase highlight
-    var lines=mergeWordsIntoLines(matched);
-    lines.forEach(function(ln){
+    retLines=mergeWordsIntoLines(matched);
+    retLines.forEach(function(ln){
       var lx=ln.x*sx, ly=ln.y*sy, lw=(ln.r-ln.x)*sx, lh=ln.h*sy;
       if(tool==='highlight'){
-        ctx.globalAlpha=0.38;
-        ctx.fillRect(lx,ly,lw,lh);
+        ctx.globalAlpha=0.38; ctx.fillRect(lx,ly,lw,lh);
       } else if(tool==='underline'){
         ctx.globalAlpha=1; ctx.lineWidth=2.5*sx; ctx.lineCap='round';
         ctx.beginPath(); ctx.moveTo(lx,ly+lh); ctx.lineTo(lx+lw,ly+lh); ctx.stroke();
       } else {
-        // strikethrough
         ctx.globalAlpha=1; ctx.lineWidth=2.2*sx; ctx.lineCap='round';
-        ctx.beginPath();
-        var mid=ly+lh*0.55;
-        ctx.moveTo(lx,mid); ctx.lineTo(lx+lw,mid); ctx.stroke();
+        ctx.beginPath(); var mid=ly+lh*0.55; ctx.moveTo(lx,mid); ctx.lineTo(lx+lw,mid); ctx.stroke();
       }
     });
   }
   ctx.restore();
+  return retLines;
+}
+
+function commitSnap(n,cv,cssW,cssH,x1,y1,x2,y2){
+  drawSnapCore(n,cv,cssW,cssH,x1,y1,x2,y2);
   drawings[n]=cv.toDataURL('image/png');
   rn({type:'ANNOT',page:n,data:drawings[n]});
+}
+
+// ── Selection Adjust UI ────────────────────────────────────────────────────
+function clearSelectionUI(){
+  if(!selectionState)return;
+  selectionState.wrap.querySelectorAll('.sel-handle,.sel-toolbar').forEach(function(el){el.remove();});
+  selectionState=null;
+  selDrag=null;
+}
+
+function enterSelectionAdjust(n,cv,cssW,cssH,x1,y1,x2,y2,snapshot,wrap){
+  clearSelectionUI();
+  selectionState={n:n,cv:cv,cssW:cssW,cssH:cssH,
+    x1:Math.min(x1,x2),y1:Math.min(y1,y2),
+    x2:Math.max(x1,x2),y2:Math.max(y1,y2),
+    snapshot:snapshot,wrap:wrap,handleLeft:null,handleRight:null};
+  drawSnapPreview();
+  renderHandles();
+}
+
+function drawSnapPreview(){
+  var s=selectionState; if(!s)return;
+  s.cv.getContext('2d').putImageData(s.snapshot,0,0);
+  var lines=drawSnapCore(s.n,s.cv,s.cssW,s.cssH,s.x1,s.y1,s.x2,s.y2);
+  if(lines&&lines.length){
+    s.handleLeft ={x:lines[0].x,               y:lines[0].y+lines[0].h/2};
+    s.handleRight={x:lines[lines.length-1].r,   y:lines[lines.length-1].y+lines[lines.length-1].h/2};
+  } else {
+    var midY=(s.y1+s.y2)/2;
+    s.handleLeft={x:s.x1,y:midY};
+    s.handleRight={x:s.x2,y:midY};
+  }
+}
+
+function renderHandles(){
+  var s=selectionState; if(!s)return;
+  var lx=s.handleLeft ?s.handleLeft.x :s.x1;
+  var ly=s.handleLeft ?s.handleLeft.y :(s.y1+s.y2)/2;
+  var rx=s.handleRight?s.handleRight.x:s.x2;
+  var ry=s.handleRight?s.handleRight.y:(s.y1+s.y2)/2;
+
+  function makeHandle(side,hx,hy){
+    var h=document.createElement('div');
+    h.className='sel-handle'; h.dataset.side=side;
+    h.style.left=hx+'px'; h.style.top=hy+'px';
+    h.addEventListener('touchstart',function(e){
+      e.stopPropagation(); e.preventDefault();
+      selDrag={side:side,startClientX:e.touches[0].clientX,
+        startSelX:side==='left'?selectionState.x1:selectionState.x2};
+    },{passive:false});
+    h.addEventListener('mousedown',function(e){
+      e.stopPropagation();
+      selDrag={side:side,startClientX:e.clientX,
+        startSelX:side==='left'?selectionState.x1:selectionState.x2};
+    });
+    return h;
+  }
+
+  // Toolbar floats above the selection, centred horizontally
+  var tb=document.createElement('div');
+  tb.className='sel-toolbar';
+  tb.style.left=((lx+rx)/2)+'px';
+  tb.style.top=Math.max(6,Math.min(ly,ry,s.y1)-46)+'px';
+
+  var applyBtn=document.createElement('button');
+  applyBtn.className='sel-btn confirm'; applyBtn.textContent='✓ Apply';
+  var cancelBtn=document.createElement('button');
+  cancelBtn.className='sel-btn cancel'; cancelBtn.textContent='✕ Cancel';
+
+  function doApply(e){e.stopPropagation();e.preventDefault();confirmSelection();}
+  function doCancel(e){e.stopPropagation();e.preventDefault();cancelSelection();}
+  applyBtn.addEventListener('click',doApply);   applyBtn.addEventListener('touchend',doApply);
+  cancelBtn.addEventListener('click',doCancel); cancelBtn.addEventListener('touchend',doCancel);
+  tb.appendChild(applyBtn); tb.appendChild(cancelBtn);
+
+  // Attach to page-wrap (not page-clip) so handles aren't clipped by overflow:hidden
+  s.wrap.appendChild(makeHandle('left',lx,ly));
+  s.wrap.appendChild(makeHandle('right',rx,ry));
+  s.wrap.appendChild(tb);
+}
+
+function updateHandlePositions(){
+  var s=selectionState; if(!s)return;
+  var lh=s.wrap.querySelector('.sel-handle[data-side="left"]');
+  var rh=s.wrap.querySelector('.sel-handle[data-side="right"]');
+  if(lh&&s.handleLeft) { lh.style.left=s.handleLeft.x+'px';  lh.style.top=s.handleLeft.y+'px';  }
+  if(rh&&s.handleRight){ rh.style.left=s.handleRight.x+'px'; rh.style.top=s.handleRight.y+'px'; }
+}
+
+function confirmSelection(){
+  if(!selectionState)return;
+  var s=selectionState;
+  var n=s.n,cv=s.cv,cssW=s.cssW,cssH=s.cssH;
+  var x1=s.x1,y1=s.y1,x2=s.x2,y2=s.y2,snap=s.snapshot;
+  clearSelectionUI();
+  cv.getContext('2d').putImageData(snap,0,0);
+  commitSnap(n,cv,cssW,cssH,x1,y1,x2,y2);
+}
+
+function cancelSelection(){
+  if(!selectionState)return;
+  var s=selectionState;
+  clearSelectionUI();
+  s.cv.getContext('2d').putImageData(s.snapshot,0,0);
 }
 
 // ── Stamps ────────────────────────────────────────────────────────────────
@@ -710,6 +848,7 @@ function setupDraw(cv,n,cssW,cssH,wrap){
   }
 
   function onStart(cx,cy){
+    clearSelectionUI();
     if(tool==='none') return;
     if(tool==='textbox'){ var p=ptCSS(cx,cy); pushUndo(n); placeTextBox(n,p.x,p.y,cssW,cssH,wrap); return; }
     if(tool==='stamp'){   var p=ptCSS(cx,cy); pushUndo(n); placeStamp(n,p.x,p.y,cssW,cssH); return; }
@@ -740,9 +879,10 @@ function setupDraw(cv,n,cssW,cssH,wrap){
     if(isSnapTool()&&snapStart){
       removeSnapRect(wrap);
       var pe=ptCSS(cx,cy);
-      ctx.putImageData(snapSnapshot,0,0);
-      commitSnap(n,cv,cssW,cssH,snapStart.x,snapStart.y,pe.x,pe.y);
-      snapStart=null; snapSnapshot=null; activeCvs=null; return;
+      var snap_ss=snapSnapshot,snap_x1=snapStart.x,snap_y1=snapStart.y;
+      snapStart=null; snapSnapshot=null; activeCvs=null;
+      enterSelectionAdjust(n,cv,cssW,cssH,snap_x1,snap_y1,pe.x,pe.y,snap_ss,wrap);
+      return;
     }
     if(tool==='shape'&&shapeStart&&shapeSnapshot){
       ctx.putImageData(shapeSnapshot,0,0);
