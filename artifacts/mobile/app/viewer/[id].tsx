@@ -20,6 +20,7 @@ import AnnotationToolbar from "@/components/AnnotationToolbar";
 import NoteModal from "@/components/NoteModal";
 import PDFViewer, { PDFViewerRef } from "@/components/PDFViewer";
 import PageIndicator from "@/components/PageIndicator";
+import ShareSheet from "@/components/ShareSheet";
 import ThumbnailStrip from "@/components/ThumbnailStrip";
 import { useLibrary } from "@/context/LibraryContext";
 import { useColors } from "@/hooks/useColors";
@@ -65,6 +66,9 @@ export default function ViewerScreen() {
   const [searchResultIdx, setSearchResultIdx] = useState(0);
   const [searchPending, setSearchPending] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Share
+  const [showShare, setShowShare] = useState(false);
 
   // Notes
   const [noteModalVisible, setNoteModalVisible] = useState(false);
@@ -348,6 +352,12 @@ export default function ViewerScreen() {
             >
               <Feather name="edit-2" size={17} color={showToolbar ? "#60A5FA" : "white"} />
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowShare(true)}
+              style={styles.headerBtn}
+            >
+              <Feather name="share-2" size={17} color="white" />
+            </TouchableOpacity>
           </View>
         )}
       </Animated.View>
@@ -418,6 +428,15 @@ export default function ViewerScreen() {
             onPageSelect={handleThumbPageSelect}
           />
         </View>
+      )}
+
+      {/* ── Share sheet ─────────────────────────────────────────────────── */}
+      {showShare && (
+        <ShareSheet
+          visible={showShare}
+          file={file}
+          onClose={() => setShowShare(false)}
+        />
       )}
 
       {/* ── Sticky note modal ────────────────────────────────────────────── */}

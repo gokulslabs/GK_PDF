@@ -56,8 +56,11 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "expo-clipboard": "^55.0.13",
     "expo-document-picker": "~11.10.1",
     "expo-file-system": "~18.0.12",
+    "expo-print": "^55.0.13",
+    "expo-sharing": "^55.0.18",
     "react-native-webview": "13.13.5"
   }
 }
