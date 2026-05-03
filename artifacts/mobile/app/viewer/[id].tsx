@@ -54,6 +54,7 @@ export default function ViewerScreen() {
 
   const pdfRef = useRef<PDFViewerRef>(null);
   const searchInputRef = useRef<TextInput>(null);
+  const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Reader state ──────────────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
@@ -120,12 +121,42 @@ export default function ViewerScreen() {
     }
   }, []);
 
-  // ── Chrome ────────────────────────────────────────────────────────────
-  const toggleChrom = useCallback(() => {
-    const toValue = chromVisible ? 0 : 1;
-    Animated.timing(chromAnim, { toValue, duration: 200, useNativeDriver: true }).start();
-    setChromVisible((v) => !v);
-  }, [chromVisible]);
+  // ── Chrome / auto-hide ────────────────────────────────────────────────
+  const HIDE_DELAY = 4000;
+
+  const hideChrom = useCallback(() => {
+    Animated.timing(chromAnim, { toValue: 0, duration: 260, useNativeDriver: true }).start();
+    setChromVisible(false);
+  }, [chromAnim]);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityRef.current) clearTimeout(inactivityRef.current);
+    inactivityRef.current = setTimeout(hideChrom, HIDE_DELAY);
+  }, [hideChrom]);
+
+  const showChrom = useCallback(() => {
+    if (!chromVisible) {
+      Animated.timing(chromAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      setChromVisible(true);
+    }
+    resetInactivityTimer();
+  }, [chromVisible, chromAnim, resetInactivityTimer]);
+
+  // Pause auto-hide while any UI panel is open; restart when all are closed
+  useEffect(() => {
+    const anyPanelOpen = showToolbar || isSearching || showThumbs || showOutline || showColorPicker || noteModalVisible || pwdVisible || showShare;
+    if (anyPanelOpen) {
+      if (inactivityRef.current) clearTimeout(inactivityRef.current);
+    } else {
+      resetInactivityTimer();
+    }
+  }, [showToolbar, isSearching, showThumbs, showOutline, showColorPicker, noteModalVisible, pwdVisible, showShare]);
+
+  // Start timer on mount
+  useEffect(() => {
+    resetInactivityTimer();
+    return () => { if (inactivityRef.current) clearTimeout(inactivityRef.current); };
+  }, []);
 
   // ── Outline panel ────────────────────────────────────────────────────
   function openOutline() {
@@ -360,7 +391,7 @@ export default function ViewerScreen() {
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" hidden={!chromVisible} />}
 
       {/* PDF area */}
-      <TouchableOpacity activeOpacity={1} onPress={toggleChrom} style={styles.pdfArea}>
+      <TouchableOpacity activeOpacity={1} onPress={showChrom} style={styles.pdfArea}>
         <PDFViewer
           ref={pdfRef}
           fileUri={file.uri}
