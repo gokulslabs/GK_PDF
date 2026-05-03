@@ -81,6 +81,11 @@ export default function ViewerScreen() {
   const [canUndo, setCanUndo] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
+  // ── Go-to-page input ─────────────────────────────────────────────────
+  const [showPageInput, setShowPageInput] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState("");
+  const pageInputRef = useRef<TextInput>(null);
+
   // ── Thumbnails ────────────────────────────────────────────────────────
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
 
@@ -152,6 +157,27 @@ export default function ViewerScreen() {
     setViewModeState(next);
     pdfRef.current?.setViewMode(next);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  // ── Go-to-page ────────────────────────────────────────────────────────
+  function openPageInput() {
+    setPageInputValue(String(currentPage));
+    setShowPageInput(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTimeout(() => { pageInputRef.current?.focus(); pageInputRef.current?.selectAll?.(); }, 80);
+  }
+  function closePageInput() {
+    setShowPageInput(false);
+    setPageInputValue("");
+    Keyboard.dismiss();
+  }
+  function submitPageInput() {
+    const n = parseInt(pageInputValue, 10);
+    if (!isNaN(n) && n >= 1 && n <= totalPages) {
+      pdfRef.current?.goToPage(n);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    closePageInput();
   }
 
   // ── Page ──────────────────────────────────────────────────────────────
@@ -487,10 +513,35 @@ export default function ViewerScreen() {
         </Animated.View>
       )}
 
-      {/* ── Page indicator ──────────────────────────────────────────────── */}
+      {/* ── Page indicator / Go-to-page ─────────────────────────────────── */}
       {totalPages > 0 && chromVisible && !isSearching && (
         <Animated.View style={[styles.pageIndicator, { bottom: bottomExtra + 14, opacity: chromAnim }]}>
-          <PageIndicator current={currentPage} total={totalPages} />
+          {showPageInput ? (
+            <View style={styles.goToPagePill}>
+              <TextInput
+                ref={pageInputRef}
+                style={styles.goToPageInput}
+                value={pageInputValue}
+                onChangeText={setPageInputValue}
+                keyboardType="number-pad"
+                returnKeyType="go"
+                onSubmitEditing={submitPageInput}
+                selectTextOnFocus
+                maxLength={6}
+              />
+              <Text style={styles.goToPageSlash}>/ {totalPages}</Text>
+              <TouchableOpacity onPress={submitPageInput} style={styles.goToPageBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Feather name="arrow-right" size={14} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={closePageInput} style={styles.goToPageClose} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Feather name="x" size={13} color="rgba(255,255,255,0.55)" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={openPageInput} activeOpacity={0.75}>
+              <PageIndicator current={currentPage} total={totalPages} />
+            </TouchableOpacity>
+          )}
         </Animated.View>
       )}
 
@@ -651,6 +702,27 @@ const styles = StyleSheet.create({
   resultNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(139,92,246,0.18)", borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.35)" },
 
   pageIndicator: { position: "absolute", right: 16 },
+
+  goToPagePill: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "rgba(11,11,15,0.92)",
+    borderRadius: 22, borderWidth: 1, borderColor: "rgba(139,92,246,0.55)",
+    paddingHorizontal: 10, paddingVertical: 5,
+    shadowColor: "rgba(139,92,246,1)",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.40, shadowRadius: 10, elevation: 6,
+  },
+  goToPageInput: {
+    color: "white", fontSize: 15, fontWeight: "700", fontFamily: "Inter_700Bold",
+    minWidth: 32, textAlign: "center", paddingVertical: 0,
+  },
+  goToPageSlash: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_500Medium" },
+  goToPageBtn: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: "rgba(139,92,246,0.80)",
+    alignItems: "center", justifyContent: "center",
+  },
+  goToPageClose: { paddingLeft: 2 },
   toolbar: { position: "absolute", left: 0, right: 0 },
   thumbsWrap: { position: "absolute", left: 0, right: 0 },
 
