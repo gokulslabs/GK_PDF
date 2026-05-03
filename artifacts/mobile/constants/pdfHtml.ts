@@ -335,7 +335,27 @@ async function buildTextIndex(n,page,vp,dpr){
       var tx=pdfjsLib.Util.transform(vp.transform,item.transform);
       var fsPx=Math.sqrt(tx[2]*tx[2]+tx[3]*tx[3])||Math.abs(tx[0]);
       var wPx=item.width>0?item.width*Math.abs(tx[0]/(item.transform[0]||1)):fsPx*item.str.length*0.55;
-      items.push({str:item.str,x:tx[4]/dpr,y:(tx[5]-fsPx)/dpr,w:Math.max(wPx/dpr,4),h:Math.max(fsPx*1.3/dpr,7)});
+      var ix=tx[4]/dpr, iy=(tx[5]-fsPx)/dpr;
+      var iw=Math.max(wPx/dpr,4), ih=Math.max(fsPx*1.3/dpr,7);
+      var str=item.str;
+      var totalLen=str.length||1;
+      // Split each text run into individual words so a tap on one word
+      // doesn't snap to the whole sentence.
+      var charOffset=0;
+      str.split(/(\s+)/).forEach(function(tok){
+        if(!tok){ return; }
+        if(!tok.trim()){ charOffset+=tok.length; return; } // skip whitespace tokens
+        var startFrac=charOffset/totalLen;
+        var wordFrac=tok.length/totalLen;
+        items.push({
+          str:tok,
+          x:ix+startFrac*iw,
+          y:iy,
+          w:Math.max(wordFrac*iw,4),
+          h:ih,
+        });
+        charOffset+=tok.length;
+      });
     });
     textIndex[n]=items;
   }catch(e){ textIndex[n]=[]; }
@@ -444,7 +464,8 @@ async function doSearch(query){
     var items=textIndex[n]||[];
     var matched=items.filter(function(it){ return it.str.toLowerCase().indexOf(lq)!==-1; });
     if(!matched.length){
-      var full=items.map(function(i){ return i.str; }).join('').toLowerCase();
+      // Fallback: join all words with spaces so phrase-level queries still work
+      var full=items.map(function(i){ return i.str; }).join(' ').toLowerCase();
       if(full.indexOf(lq)!==-1) matched=items;
     }
     if(matched.length){
