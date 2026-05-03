@@ -37,10 +37,17 @@ export default function FileCard({ file, onPress, onLongPress }: Props) {
       onLongPress={onLongPress}
       style={[
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          shadowColor: colors.primary,
+        },
       ]}
       activeOpacity={0.72}
     >
+      {/* Purple left accent bar */}
+      <View style={[styles.accentBar, { backgroundColor: colors.primary + "80" }]} />
+
       <View style={[styles.iconWrap, { backgroundColor: colors.primary + "18" }]}>
         <Feather name="file-text" size={26} color={colors.primary} />
         {file.isFavorite && (
@@ -92,6 +99,10 @@ export default function FileCard({ file, onPress, onLongPress }: Props) {
                 {
                   width: `${progress * 100}%` as `${number}%`,
                   backgroundColor: colors.primary,
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.7,
+                  shadowRadius: 3,
                 },
               ]}
             />
@@ -109,11 +120,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
+    paddingLeft: 8,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     gap: 12,
     marginHorizontal: 16,
     marginBottom: 8,
+    overflow: "hidden",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  accentBar: {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    borderRadius: 2,
   },
   iconWrap: {
     width: 50,

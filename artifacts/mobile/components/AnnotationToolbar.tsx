@@ -69,8 +69,26 @@ export default function AnnotationToolbar({
 
   function haptic() { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }
 
+  const activeToolStyle = {
+    backgroundColor: colors.primary + "22",
+    borderColor: colors.primary + "66",
+    borderWidth: 1,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 7,
+    elevation: 5,
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+    <View style={[
+      styles.container,
+      {
+        backgroundColor: colors.card,
+        borderTopColor: colors.primary + "30",
+        borderTopWidth: 1,
+      },
+    ]}>
       {/* Main tool row */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
 
@@ -84,30 +102,34 @@ export default function AnnotationToolbar({
           <Text style={[styles.toolLabel, { color: canUndo ? colors.primary : colors.mutedForeground }]}>Undo</Text>
         </TouchableOpacity>
 
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <View style={[styles.divider, { backgroundColor: colors.primary + "25" }]} />
 
-        {TOOLS.map(({ tool, icon, label }) => (
-          <TouchableOpacity
-            key={tool}
-            onPress={() => { haptic(); onToolChange(tool); }}
-            style={[
-              styles.toolBtn,
-              activeTool === tool && { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55", borderWidth: 1 },
-            ]}
-          >
-            <Feather name={icon as keyof typeof Feather.glyphMap} size={18} color={activeTool === tool ? colors.primary : colors.mutedForeground} />
-            <Text style={[styles.toolLabel, { color: activeTool === tool ? colors.primary : colors.mutedForeground }]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
+        {TOOLS.map(({ tool, icon, label }) => {
+          const isActive = activeTool === tool;
+          return (
+            <TouchableOpacity
+              key={tool}
+              onPress={() => { haptic(); onToolChange(tool); }}
+              style={[styles.toolBtn, isActive && activeToolStyle]}
+            >
+              <Feather name={icon as keyof typeof Feather.glyphMap} size={18} color={isActive ? colors.primary : colors.mutedForeground} />
+              <Text style={[styles.toolLabel, { color: isActive ? colors.primary : colors.mutedForeground }]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
 
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <View style={[styles.divider, { backgroundColor: colors.primary + "25" }]} />
 
         {/* Quick color dots */}
         {QUICK_COLORS.map((c) => (
           <TouchableOpacity
             key={c}
             onPress={() => { haptic(); onColorChange(c); }}
-            style={[styles.colorDot, { backgroundColor: c }, activeColor === c && styles.colorDotActive]}
+            style={[
+              styles.colorDot,
+              { backgroundColor: c },
+              activeColor === c && [styles.colorDotActive, { shadowColor: c }],
+            ]}
           />
         ))}
 
@@ -123,28 +145,58 @@ export default function AnnotationToolbar({
 
       {/* Shape sub-row */}
       {activeTool === "shape" && (
-        <View style={[styles.subRow, { borderTopColor: colors.border }]}>
+        <View style={[styles.subRow, { borderTopColor: colors.primary + "20" }]}>
           <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>Shape:</Text>
-          {SHAPE_TYPES.map(({ type, icon, label }) => (
-            <TouchableOpacity key={type} onPress={() => { haptic(); onShapeTypeChange(type); }}
-              style={[styles.subBtn, shapeType === type && { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55", borderWidth: 1 }]}>
-              <Feather name={icon as keyof typeof Feather.glyphMap} size={15} color={shapeType === type ? colors.primary : colors.mutedForeground} />
-              <Text style={[styles.subBtnLabel, { color: shapeType === type ? colors.primary : colors.mutedForeground }]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
+          {SHAPE_TYPES.map(({ type, icon, label }) => {
+            const isActive = shapeType === type;
+            return (
+              <TouchableOpacity key={type} onPress={() => { haptic(); onShapeTypeChange(type); }}
+                style={[
+                  styles.subBtn,
+                  isActive && {
+                    backgroundColor: colors.primary + "22",
+                    borderColor: colors.primary + "66",
+                    borderWidth: 1,
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.45,
+                    shadowRadius: 5,
+                    elevation: 3,
+                  },
+                ]}>
+                <Feather name={icon as keyof typeof Feather.glyphMap} size={15} color={isActive ? colors.primary : colors.mutedForeground} />
+                <Text style={[styles.subBtnLabel, { color: isActive ? colors.primary : colors.mutedForeground }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
       {/* Stamp sub-row */}
       {activeTool === "stamp" && (
-        <View style={[styles.subRow, { borderTopColor: colors.border }]}>
+        <View style={[styles.subRow, { borderTopColor: colors.primary + "20" }]}>
           <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>Stamp:</Text>
-          {STAMP_TYPES.map(({ type, label, color }) => (
-            <TouchableOpacity key={type} onPress={() => { haptic(); onStampTypeChange(type); }}
-              style={[styles.subBtn, stampType === type && { backgroundColor: color + "18", borderColor: color + "66", borderWidth: 1 }]}>
-              <Text style={[styles.subBtnLabel, { color: stampType === type ? color : colors.mutedForeground, fontWeight: stampType === type ? "700" : "500" }]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
+          {STAMP_TYPES.map(({ type, label, color }) => {
+            const isActive = stampType === type;
+            return (
+              <TouchableOpacity key={type} onPress={() => { haptic(); onStampTypeChange(type); }}
+                style={[
+                  styles.subBtn,
+                  isActive && {
+                    backgroundColor: color + "18",
+                    borderColor: color + "66",
+                    borderWidth: 1,
+                    shadowColor: color,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 5,
+                    elevation: 3,
+                  },
+                ]}>
+                <Text style={[styles.subBtnLabel, { color: isActive ? color : colors.mutedForeground, fontWeight: isActive ? "700" : "500" }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
     </View>
@@ -153,20 +205,23 @@ export default function AnnotationToolbar({
 
 const styles = StyleSheet.create({
   container: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
     paddingBottom: 10,
     paddingHorizontal: 10,
-    ...(Platform.OS === "ios" ? { shadowColor: "#000", shadowOffset: { width: 0, height: -1 }, shadowOpacity: 0.08, shadowRadius: 4 } : {}),
+    ...(Platform.OS === "ios" ? { shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.12, shadowRadius: 8 } : {}),
+    elevation: 8,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 3, paddingRight: 4 },
-  toolBtn: { alignItems: "center", justifyContent: "center", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, gap: 2, minWidth: 44 },
+  toolBtn: { alignItems: "center", justifyContent: "center", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 9, gap: 2, minWidth: 44 },
   toolLabel: { fontSize: 9, fontFamily: "Inter_500Medium", fontWeight: "500" },
-  undoBtn: { borderRadius: 8 },
-  undoBtnDisabled: { opacity: 0.35 },
+  undoBtn: { borderRadius: 9 },
+  undoBtnDisabled: { opacity: 0.32 },
   divider: { width: 1, height: 28, marginHorizontal: 4 },
   colorDot: { width: 22, height: 22, borderRadius: 11, marginHorizontal: 1 },
-  colorDotActive: { borderWidth: 3, borderColor: "white", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 3 },
+  colorDotActive: {
+    borderWidth: 3, borderColor: "white",
+    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 6, elevation: 5,
+  },
   paletteBtn: {
     flexDirection: "row", alignItems: "center", gap: 3,
     paddingHorizontal: 6, paddingVertical: 4,
@@ -175,6 +230,6 @@ const styles = StyleSheet.create({
   paletteSwatch: { width: 16, height: 16, borderRadius: 8 },
   subRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, flexWrap: "wrap" },
   subLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginRight: 2 },
-  subBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 7 },
+  subBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   subBtnLabel: { fontSize: 12, fontFamily: "Inter_500Medium", fontWeight: "500" },
 });

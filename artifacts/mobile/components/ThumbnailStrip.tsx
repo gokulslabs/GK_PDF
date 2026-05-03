@@ -59,7 +59,11 @@ export default function ThumbnailStrip({
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: colors.card, borderTopColor: colors.border },
+        {
+          backgroundColor: colors.card,
+          borderTopColor: colors.primary + "30",
+          borderTopWidth: 1,
+        },
         animStyle,
       ]}
     >
@@ -85,8 +89,13 @@ export default function ThumbnailStrip({
                   styles.thumbWrap,
                   {
                     borderColor: isActive ? colors.primary : colors.border,
-                    borderWidth: isActive ? 2 : 1,
+                    borderWidth: isActive ? 2 : StyleSheet.hairlineWidth,
                     backgroundColor: colors.muted,
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: isActive ? 0.6 : 0,
+                    shadowRadius: isActive ? 8 : 0,
+                    elevation: isActive ? 4 : 0,
                   },
                 ]}
               >

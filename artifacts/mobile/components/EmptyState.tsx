@@ -48,6 +48,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.20)",
+    shadowColor: "rgba(139,92,246,1)",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 3,
   },
   title: {
     fontSize: 18,

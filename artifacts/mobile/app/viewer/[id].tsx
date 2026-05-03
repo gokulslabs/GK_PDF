@@ -330,7 +330,7 @@ export default function ViewerScreen() {
   const bottomExtra = (showThumbs ? STRIP_H : 0) + (showToolbar ? 80 : 0) + bottomInset;
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? "#1C1C1E" : "#E8E8E8" }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" hidden={!chromVisible} />}
 
       {/* PDF area */}
@@ -402,11 +402,11 @@ export default function ViewerScreen() {
             {/* Outline button — only show if PDF has outline */}
             {outlineItems.length > 0 && (
               <TouchableOpacity onPress={openOutline} style={styles.headerBtn}>
-                <Feather name="list" size={18} color={showOutline ? "#60A5FA" : "white"} />
+                <Feather name="list" size={18} color={showOutline ? colors.primary : "white"} />
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={toggleZoom} style={styles.headerBtn}>
-              <Text style={[styles.zoomBadge, showZoomControls && { color: "#60A5FA" }]}>{zoomPct}%</Text>
+              <Text style={[styles.zoomBadge, showZoomControls && { color: colors.primary }]}>{zoomPct}%</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleRotate} style={styles.headerBtn}>
               <Feather name="rotate-cw" size={17} color="white" />
@@ -418,7 +418,7 @@ export default function ViewerScreen() {
               <Feather name="search" size={19} color="white" />
             </TouchableOpacity>
             <TouchableOpacity onPress={toggleThumbs} style={styles.headerBtn}>
-              <Feather name="grid" size={18} color={showThumbs ? "#60A5FA" : "white"} />
+              <Feather name="grid" size={18} color={showThumbs ? colors.primary : "white"} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleFavorite} style={styles.headerBtn}>
               <Feather name="bookmark" size={19} color={file.isFavorite ? "#FBBF24" : "white"} />
@@ -427,7 +427,7 @@ export default function ViewerScreen() {
               onPress={() => { setShowToolbar((s) => !s); if (showThumbs) setShowThumbs(false); }}
               style={styles.headerBtn}
             >
-              <Feather name="edit-2" size={17} color={showToolbar ? "#60A5FA" : "white"} />
+              <Feather name="edit-2" size={17} color={showToolbar ? colors.primary : "white"} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowShare(true)} style={styles.headerBtn}>
               <Feather name="share-2" size={17} color="white" />
@@ -473,7 +473,7 @@ export default function ViewerScreen() {
               </TouchableOpacity>
               <Text style={styles.searchResultCount}>
                 {searchResultIdx + 1} of {searchResults.length} pages{"  ·  "}
-                <Text style={{ color: "#FCD34D" }}>
+                <Text style={{ color: colors.primary }}>
                   {searchResults[searchResultIdx]?.count ?? 0} match{(searchResults[searchResultIdx]?.count ?? 0) !== 1 ? "es" : ""}
                 </Text>
               </Text>
@@ -609,7 +609,9 @@ const styles = StyleSheet.create({
   header: {
     position: "absolute", left: 0, right: 0, height: 56,
     flexDirection: "row", alignItems: "center", paddingHorizontal: 2,
-    backgroundColor: "rgba(0,0,0,0.62)",
+    backgroundColor: "rgba(11,11,15,0.90)",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(139,92,246,0.20)",
   },
   headerBtn: { width: 38, height: 46, alignItems: "center", justifyContent: "center" },
   headerTitle: { flex: 1, color: "white", fontSize: 13, fontWeight: "600", fontFamily: "Inter_600SemiBold", textAlign: "center" },
@@ -618,7 +620,8 @@ const styles = StyleSheet.create({
 
   searchInputWrap: {
     flex: 1, flexDirection: "row", alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 8,
+    backgroundColor: "rgba(139,92,246,0.14)", borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.35)",
     paddingHorizontal: 10, paddingVertical: 7, marginHorizontal: 4, gap: 6,
   },
   searchInput: { flex: 1, color: "white", fontSize: 15, fontFamily: "Inter_400Regular", paddingVertical: 0 },
@@ -627,21 +630,25 @@ const styles = StyleSheet.create({
     position: "absolute", left: 0, right: 0,
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     paddingHorizontal: 12, paddingVertical: 8, gap: 6,
+    backgroundColor: "rgba(11,11,15,0.92)",
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(139,92,246,0.20)",
   },
-  zoomBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 8 },
+  zoomBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(139,92,246,0.15)", borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.30)" },
   zoomText: { color: "white", fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold", minWidth: 44, textAlign: "center" },
-  zoomDivider: { width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.25)", marginHorizontal: 4 },
-  zoomPresetBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 7 },
+  zoomDivider: { width: 1, height: 20, backgroundColor: "rgba(139,92,246,0.30)", marginHorizontal: 4 },
+  zoomPresetBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(139,92,246,0.15)", borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.30)" },
   zoomPresetText: { color: "white", fontSize: 11, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
 
   searchBar: {
     position: "absolute", left: 0, right: 0, height: 44,
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     paddingHorizontal: 16, gap: 8,
+    backgroundColor: "rgba(11,11,15,0.88)",
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(139,92,246,0.18)",
   },
   searchStatus: { color: "rgba(255,255,255,0.65)", fontSize: 13, fontFamily: "Inter_400Regular" },
   searchResultCount: { flex: 1, color: "white", fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "center" },
-  resultNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 18 },
+  resultNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(139,92,246,0.18)", borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.35)" },
 
   pageIndicator: { position: "absolute", right: 16 },
   toolbar: { position: "absolute", left: 0, right: 0 },

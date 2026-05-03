@@ -206,7 +206,7 @@ export default function NoteModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.72)",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
@@ -215,8 +215,14 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 400,
     borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.25)",
     overflow: "hidden",
+    shadowColor: "rgba(139,92,246,1)",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.30,
+    shadowRadius: 20,
+    elevation: 12,
   },
   cardHeader: {
     flexDirection: "row",

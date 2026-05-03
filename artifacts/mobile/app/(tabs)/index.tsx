@@ -115,9 +115,19 @@ export default function LibraryScreen() {
           </Text>
           <TouchableOpacity
             onPress={handleImport}
-            style={[styles.importBtn, { backgroundColor: colors.primary }]}
+            style={[
+              styles.importBtn,
+              {
+                backgroundColor: colors.primary,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.55,
+                shadowRadius: 10,
+                elevation: 6,
+              },
+            ]}
             disabled={importing}
-            activeOpacity={0.8}
+            activeOpacity={0.78}
           >
             <Feather name="plus" size={16} color="white" />
             <Text style={styles.importBtnText}>
