@@ -141,7 +141,16 @@ var shapeType = 'rect'; // 'line' | 'rect' | 'circle'
 
 // ── RN Bridge ────────────────────────────────────────────────────────────
 function rn(data) {
-  try { window.ReactNativeWebView.postMessage(JSON.stringify(data)); } catch(e) {}
+  var str = JSON.stringify(data);
+  try {
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(str);
+    } else {
+      // Expo Web: ReactNativeWebView is not injected into the iframe,
+      // so post to the parent window which react-native-webview listens on.
+      window.parent.postMessage(str, '*');
+    }
+  } catch(e) {}
 }
 
 function recv(raw) {

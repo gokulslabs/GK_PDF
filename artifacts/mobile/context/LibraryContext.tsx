@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { Platform } from "react-native";
 
 import { Folder, PDFFile, StickyNote } from "@/types/pdf";
 
@@ -37,10 +38,18 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
-        const parsed: PDFFile[] = (data.files || []).map((f: PDFFile) => ({
+        let parsed: PDFFile[] = (data.files || []).map((f: PDFFile) => ({
           ...f,
           notes: f.notes ?? {},
         }));
+        // Migration: fix demo PDF URIs stored with old expo-asset hashed URLs
+        if (Platform.OS === "web") {
+          parsed = parsed.map((f) =>
+            f.name.includes("HemeOnc") && f.uri !== "/HemeOnc_Handbook.pdf"
+              ? { ...f, uri: "/HemeOnc_Handbook.pdf" }
+              : f
+          );
+        }
         setFiles(parsed);
         setFolders(data.folders || []);
       }

@@ -1,5 +1,11 @@
 import * as FileSystem from "expo-file-system";
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 
@@ -43,6 +49,45 @@ interface Props {
   onNoteTap?: (noteId: string) => void;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Web-specific iframe renderer
+// Uses a plain <iframe> so we can use contentWindow.postMessage directly,
+// bypassing react-native-webview's unreliable web message bridge.
+// ─────────────────────────────────────────────────────────────────────────────
+function WebIframePDFViewer({
+  innerRef,
+  html,
+  onMsg,
+}: {
+  innerRef: React.RefObject<HTMLIFrameElement | null>;
+  html: string;
+  onMsg: (data: string) => void;
+}) {
+  useEffect(() => {
+    function handler(e: MessageEvent) {
+      // Only accept messages from our own iframe
+      if (innerRef.current && e.source === innerRef.current.contentWindow) {
+        if (typeof e.data === "string") onMsg(e.data);
+      }
+    }
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  return (
+    <iframe
+      ref={innerRef as React.RefObject<HTMLIFrameElement>}
+      srcDoc={html}
+      style={{ flex: 1, border: "none", width: "100%", height: "100%" }}
+      sandbox="allow-scripts allow-same-origin"
+      title="PDF Viewer"
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
 const PDFViewer = forwardRef<PDFViewerRef, Props>(
   (
     {
@@ -61,7 +106,12 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
     ref
   ) => {
     const colors = useColors();
+
+    // Native WebView ref
     const webRef = useRef<WebView>(null);
+    // Web iframe ref
+    const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [html, setHtml] = useState<string | null>(null);
@@ -81,8 +131,8 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
         setLoading(true);
         setError(null);
         let b64: string;
+
         if (Platform.OS === "web" || fileUri.startsWith("http")) {
-          // Web or HTTP URL: fetch and convert to base64 via FileReader
           const response = await fetch(fileUri);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const blob = await response.blob();
@@ -100,6 +150,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
             encoding: FileSystem.EncodingType.Base64,
           });
         }
+
         pendingB64.current = b64;
         setHtml(getPdfViewerHtml(darkMode));
       } catch (e: unknown) {
@@ -110,10 +161,17 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       }
     }
 
+    // ── Bridge: send message to the viewer ──────────────────────────────────
     function inject(msg: object) {
-      if (webRef.current) {
-        const escaped = JSON.stringify(JSON.stringify(msg));
-        webRef.current.injectJavaScript(`recv(${escaped});true;`);
+      const payload = JSON.stringify(msg);
+      if (Platform.OS === "web") {
+        // Web: directly post to iframe contentWindow
+        const win = iframeRef.current?.contentWindow;
+        if (win) win.postMessage(payload, "*");
+      } else {
+        // Native: eval code in WebView
+        const escaped = JSON.stringify(payload);
+        webRef.current?.injectJavaScript(`recv(${escaped});true;`);
       }
     }
 
@@ -134,9 +192,10 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       deleteNote: (id) => inject({ type: "DELETE_NOTE", id }),
     }));
 
-    function handleMessage(e: WebViewMessageEvent) {
+    // ── Bridge: receive message from the viewer ─────────────────────────────
+    function handleMsg(data: string) {
       try {
-        const msg = JSON.parse(e.nativeEvent.data);
+        const msg = JSON.parse(data);
         switch (msg.type) {
           case "READY":
             if (pendingB64.current) {
@@ -147,8 +206,8 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           case "LOADED":
             setLoading(false);
             onLoaded?.(msg.pages);
-            Object.entries(pendingAnnotations.current).forEach(([page, data]) => {
-              inject({ type: "RESTORE", page: parseInt(page), data });
+            Object.entries(pendingAnnotations.current).forEach(([page, d]) => {
+              inject({ type: "RESTORE", page: parseInt(page), data: d });
             });
             break;
           case "PAGE":
@@ -178,6 +237,11 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       } catch (_) {}
     }
 
+    // Adapter for native WebView's onMessage event shape
+    function handleWebViewMessage(e: WebViewMessageEvent) {
+      handleMsg(e.nativeEvent.data);
+    }
+
     if (error) {
       return (
         <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -191,21 +255,29 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
     return (
       <View style={styles.container}>
         {html ? (
-          <WebView
-            ref={webRef}
-            source={{ html, baseUrl: "https://localhost" }}
-            style={styles.webview}
-            originWhitelist={["*"]}
-            allowFileAccess
-            allowUniversalAccessFromFileURLs
-            mixedContentMode="always"
-            javaScriptEnabled
-            domStorageEnabled
-            onMessage={handleMessage}
-            scrollEnabled
-            showsVerticalScrollIndicator={false}
-            overScrollMode="never"
-          />
+          Platform.OS === "web" ? (
+            <WebIframePDFViewer
+              innerRef={iframeRef}
+              html={html}
+              onMsg={handleMsg}
+            />
+          ) : (
+            <WebView
+              ref={webRef}
+              source={{ html, baseUrl: "https://localhost" }}
+              style={styles.webview}
+              originWhitelist={["*"]}
+              allowFileAccess
+              allowUniversalAccessFromFileURLs
+              mixedContentMode="always"
+              javaScriptEnabled
+              domStorageEnabled
+              onMessage={handleWebViewMessage}
+              scrollEnabled
+              showsVerticalScrollIndicator={false}
+              overScrollMode="never"
+            />
+          )
         ) : null}
         {loading && (
           <View style={[styles.loader, { backgroundColor: darkMode ? "#1C1C1E" : "#E8E8E8" }]}>

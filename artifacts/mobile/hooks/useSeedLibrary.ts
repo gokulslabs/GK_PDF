@@ -28,10 +28,10 @@ export function useSeedLibrary() {
       await asset.downloadAsync();
 
       if (Platform.OS === "web") {
-        // On web, store the HTTP asset URL directly — no FileSystem needed
+        // On web, use the static public file URL — stable across server restarts
         await addFile({
           name: "HemeOnc Handbook 2022–2023.pdf",
-          uri: asset.uri,
+          uri: "/HemeOnc_Handbook.pdf",
           size: 7_400_000,
           pageCount: 0,
           folderId: null,
