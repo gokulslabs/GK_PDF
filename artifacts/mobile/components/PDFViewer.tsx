@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system";
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 import { getPdfViewerHtml } from "@/constants/pdfHtml";
@@ -80,9 +80,26 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       try {
         setLoading(true);
         setError(null);
-        const b64 = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        let b64: string;
+        if (Platform.OS === "web" || fileUri.startsWith("http")) {
+          // Web or HTTP URL: fetch and convert to base64 via FileReader
+          const response = await fetch(fileUri);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const blob = await response.blob();
+          b64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.includes(",") ? result.split(",")[1] : result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } else {
+          b64 = await FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        }
         pendingB64.current = b64;
         setHtml(getPdfViewerHtml(darkMode));
       } catch (e: unknown) {

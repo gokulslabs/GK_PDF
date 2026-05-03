@@ -20,6 +20,7 @@ import FileCard from "@/components/FileCard";
 import SearchBar from "@/components/SearchBar";
 import { useLibrary } from "@/context/LibraryContext";
 import { useColors } from "@/hooks/useColors";
+import { useSeedLibrary } from "@/hooks/useSeedLibrary";
 import { PDFFile } from "@/types/pdf";
 
 export default function LibraryScreen() {
@@ -27,6 +28,7 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { files, addFile, removeFile, toggleFavorite } = useLibrary();
+  const { seeding } = useSeedLibrary();
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
 
