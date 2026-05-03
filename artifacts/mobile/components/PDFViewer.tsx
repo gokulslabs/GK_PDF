@@ -75,13 +75,15 @@ function WebIframePDFViewer({
   }, []);
 
   return (
-    <iframe
-      ref={innerRef as React.RefObject<HTMLIFrameElement>}
-      srcDoc={html}
-      style={{ flex: 1, border: "none", width: "100%", height: "100%" }}
-      sandbox="allow-scripts allow-same-origin"
-      title="PDF Viewer"
-    />
+    <div style={{ position: "relative", flex: 1, width: "100%", overflow: "hidden" }}>
+      <iframe
+        ref={innerRef as React.RefObject<HTMLIFrameElement>}
+        srcDoc={html}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+        sandbox="allow-scripts allow-same-origin"
+        title="PDF Viewer"
+      />
+    </div>
   );
 }
 

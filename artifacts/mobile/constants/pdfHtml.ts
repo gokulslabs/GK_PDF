@@ -417,15 +417,14 @@ function renderNotePin(note, wrap, cssW, cssH) {
 // ── Long Press (note creation) ────────────────────────────────────────────
 function setupLongPress(wrap, n, cssW, cssH) {
   var timer = null; var sx = 0, sy = 0;
-  wrap.addEventListener('touchstart', function(e) {
+
+  function startTimer(clientX, clientY) {
     if (tool !== 'none') return;
-    var touch = e.touches[0];
     var rect = wrap.getBoundingClientRect();
-    sx = (touch.clientX - rect.left) / cssW;
-    sy = (touch.clientY - rect.top) / cssH;
+    sx = (clientX - rect.left) / cssW;
+    sy = (clientY - rect.top) / cssH;
     timer = setTimeout(function() {
       timer = null;
-      // Show ripple
       var ripple = document.createElement('div');
       ripple.className = 'press-ripple';
       ripple.style.left = (sx * cssW) + 'px';
@@ -434,12 +433,21 @@ function setupLongPress(wrap, n, cssW, cssH) {
       setTimeout(function() { ripple.remove(); }, 700);
       rn({ type: 'LONG_PRESS', page: n, x: sx, y: sy });
     }, 580);
+  }
+
+  wrap.addEventListener('touchstart', function(e) {
+    startTimer(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
+  wrap.addEventListener('mousedown', function(e) {
+    startTimer(e.clientX, e.clientY);
+  });
 
   function cancel() { if (timer) { clearTimeout(timer); timer = null; } }
   wrap.addEventListener('touchmove', cancel, { passive: true });
   wrap.addEventListener('touchend', cancel, { passive: true });
   wrap.addEventListener('touchcancel', cancel, { passive: true });
+  wrap.addEventListener('mousemove', cancel);
+  wrap.addEventListener('mouseup', cancel);
 }
 
 // ── Annotation Drawing ────────────────────────────────────────────────────
@@ -450,50 +458,45 @@ function setupDraw(cv, n) {
   var ctx = cv.getContext('2d');
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
-  function pt(t) {
+  function pt(clientX, clientY) {
     var r = cv.getBoundingClientRect();
-    return { x:(t.clientX-r.left)*(cv.width/r.width), y:(t.clientY-r.top)*(cv.height/r.height) };
+    return { x:(clientX-r.left)*(cv.width/r.width), y:(clientY-r.top)*(cv.height/r.height) };
   }
 
+  // ── Touch ──
   cv.addEventListener('touchstart', function(e) {
     if (tool === 'none') return;
     e.preventDefault(); e.stopPropagation();
+    var t = e.touches[0];
     if (tool === 'shape') {
-      shapeStart = pt(e.touches[0]);
+      shapeStart = pt(t.clientX, t.clientY);
       shapeSnapshot = ctx.getImageData(0, 0, cv.width, cv.height);
-      activeCvs = cv;
-      return;
+      activeCvs = cv; return;
     }
     drawing = true; activeCvs = cv;
-    var p = pt(e.touches[0]); applyStyle(ctx); ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    var p = pt(t.clientX, t.clientY); applyStyle(ctx); ctx.beginPath(); ctx.moveTo(p.x, p.y);
   }, { passive: false });
 
   cv.addEventListener('touchmove', function(e) {
     if (activeCvs !== cv) return;
     e.preventDefault();
+    var t = e.touches[0];
     if (tool === 'shape' && shapeStart && shapeSnapshot) {
-      var p = pt(e.touches[0]);
       ctx.putImageData(shapeSnapshot, 0, 0);
-      drawShape(ctx, shapeStart, p, true);
-      return;
+      drawShape(ctx, shapeStart, pt(t.clientX, t.clientY), true); return;
     }
     if (!drawing) return;
-    var p = pt(e.touches[0]); ctx.lineTo(p.x, p.y); ctx.stroke();
+    var p = pt(t.clientX, t.clientY); ctx.lineTo(p.x, p.y); ctx.stroke();
   }, { passive: false });
 
-  function end(e) {
+  function endTouch(e) {
     if (activeCvs !== cv) return;
     if (tool === 'shape' && shapeStart && shapeSnapshot) {
       var touch = e.changedTouches && e.changedTouches[0];
-      if (touch) {
-        var p = pt(touch);
-        ctx.putImageData(shapeSnapshot, 0, 0);
-        drawShape(ctx, shapeStart, p, false);
-      }
+      if (touch) { ctx.putImageData(shapeSnapshot, 0, 0); drawShape(ctx, shapeStart, pt(touch.clientX, touch.clientY), false); }
       shapeStart = null; shapeSnapshot = null; activeCvs = null;
       drawings[n] = cv.toDataURL('image/png');
-      rn({ type: 'ANNOT', page: n, data: drawings[n] });
-      return;
+      rn({ type: 'ANNOT', page: n, data: drawings[n] }); return;
     }
     if (!drawing) return;
     drawing = false; activeCvs = null;
@@ -501,8 +504,49 @@ function setupDraw(cv, n) {
     drawings[n] = cv.toDataURL('image/png');
     rn({ type: 'ANNOT', page: n, data: drawings[n] });
   }
-  cv.addEventListener('touchend', end, { passive: true });
-  cv.addEventListener('touchcancel', end, { passive: true });
+  cv.addEventListener('touchend', endTouch, { passive: true });
+  cv.addEventListener('touchcancel', endTouch, { passive: true });
+
+  // ── Mouse (desktop / web) ──
+  cv.addEventListener('mousedown', function(e) {
+    if (tool === 'none') return;
+    e.preventDefault();
+    if (tool === 'shape') {
+      shapeStart = pt(e.clientX, e.clientY);
+      shapeSnapshot = ctx.getImageData(0, 0, cv.width, cv.height);
+      activeCvs = cv; return;
+    }
+    drawing = true; activeCvs = cv;
+    var p = pt(e.clientX, e.clientY); applyStyle(ctx); ctx.beginPath(); ctx.moveTo(p.x, p.y);
+  });
+
+  cv.addEventListener('mousemove', function(e) {
+    if (activeCvs !== cv) return;
+    if (tool === 'shape' && shapeStart && shapeSnapshot) {
+      ctx.putImageData(shapeSnapshot, 0, 0);
+      drawShape(ctx, shapeStart, pt(e.clientX, e.clientY), true); return;
+    }
+    if (!drawing) return;
+    var p = pt(e.clientX, e.clientY); ctx.lineTo(p.x, p.y); ctx.stroke();
+  });
+
+  function endMouse(e) {
+    if (activeCvs !== cv) return;
+    if (tool === 'shape' && shapeStart && shapeSnapshot) {
+      ctx.putImageData(shapeSnapshot, 0, 0);
+      drawShape(ctx, shapeStart, pt(e.clientX, e.clientY), false);
+      shapeStart = null; shapeSnapshot = null; activeCvs = null;
+      drawings[n] = cv.toDataURL('image/png');
+      rn({ type: 'ANNOT', page: n, data: drawings[n] }); return;
+    }
+    if (!drawing) return;
+    drawing = false; activeCvs = null;
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.setLineDash([0]);
+    drawings[n] = cv.toDataURL('image/png');
+    rn({ type: 'ANNOT', page: n, data: drawings[n] });
+  }
+  cv.addEventListener('mouseup', endMouse);
+  cv.addEventListener('mouseleave', endMouse);
 }
 
 function drawShape(ctx, start, end, preview) {
