@@ -33,6 +33,7 @@ interface Props {
   onError?: (msg: string) => void;
   onAnnotationSaved?: (page: number, data: string) => void;
   onSearchDone?: (results: SearchResult[]) => void;
+  onThumbnailReady?: (page: number, dataUrl: string, w: number, h: number) => void;
 }
 
 const PDFViewer = forwardRef<PDFViewerRef, Props>(
@@ -46,6 +47,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       onError,
       onAnnotationSaved,
       onSearchDone,
+      onThumbnailReady,
     },
     ref
   ) => {
@@ -56,7 +58,6 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
     const [html, setHtml] = useState<string | null>(null);
     const pendingB64 = useRef<string | null>(null);
     const pendingAnnotations = useRef<Record<number, string>>(annotations);
-    const isReady = useRef(false);
 
     useEffect(() => {
       pendingAnnotations.current = annotations;
@@ -70,7 +71,6 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       try {
         setLoading(true);
         setError(null);
-        isReady.current = false;
         const b64 = await FileSystem.readAsStringAsync(fileUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
@@ -109,7 +109,6 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
         const msg = JSON.parse(e.nativeEvent.data);
         switch (msg.type) {
           case "READY":
-            isReady.current = true;
             if (pendingB64.current) {
               inject({ type: "LOAD", data: pendingB64.current });
               pendingB64.current = null;
@@ -132,6 +131,9 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
             break;
           case "SEARCH_DONE":
             onSearchDone?.(msg.results ?? []);
+            break;
+          case "THUMB":
+            onThumbnailReady?.(msg.page, msg.data, msg.w, msg.h);
             break;
           case "ERROR":
             setError(msg.message);

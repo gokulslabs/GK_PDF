@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Keyboard,
   Platform,
   StatusBar,
   StyleSheet,
@@ -12,13 +13,13 @@ import {
   TouchableOpacity,
   View,
   useColorScheme,
-  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnnotationToolbar from "@/components/AnnotationToolbar";
 import PDFViewer, { PDFViewerRef } from "@/components/PDFViewer";
 import PageIndicator from "@/components/PageIndicator";
+import ThumbnailStrip from "@/components/ThumbnailStrip";
 import { useLibrary } from "@/context/LibraryContext";
 import { useColors } from "@/hooks/useColors";
 import { AnnotationTool } from "@/types/pdf";
@@ -27,6 +28,8 @@ interface SearchResult {
   page: number;
   count: number;
 }
+
+const STRIP_H = 108;
 
 export default function ViewerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,10 +50,14 @@ export default function ViewerScreen() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [showToolbar, setShowToolbar] = useState(false);
+  const [showThumbs, setShowThumbs] = useState(false);
   const [activeTool, setActiveTool] = useState<AnnotationTool>("none");
   const [activeColor, setActiveColor] = useState("#FFEB3B");
   const [chromVisible, setChromVisible] = useState(true);
   const chromAnim = useRef(new Animated.Value(1)).current;
+
+  // Thumbnails
+  const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
 
   // Search state
   const [isSearching, setIsSearching] = useState(false);
@@ -67,14 +74,14 @@ export default function ViewerScreen() {
     }
   }, []);
 
-  // ── Chrome toggle ──────────────────────────────────────────────────────
+  // ── Chrome ──────────────────────────────────────────────────────────────
   const toggleChrom = useCallback(() => {
     const toValue = chromVisible ? 0 : 1;
     Animated.timing(chromAnim, { toValue, duration: 200, useNativeDriver: true }).start();
     setChromVisible((v) => !v);
   }, [chromVisible]);
 
-  // ── Page change / loaded ───────────────────────────────────────────────
+  // ── Page tracking ────────────────────────────────────────────────────────
   function handlePageChange(page: number) {
     setCurrentPage(page);
     if (file) updateProgress(file.id, page);
@@ -85,7 +92,7 @@ export default function ViewerScreen() {
     if (file) updateProgress(file.id, file.lastPage || 1, pages);
   }
 
-  // ── Annotation ─────────────────────────────────────────────────────────
+  // ── Annotations ──────────────────────────────────────────────────────────
   function handleTool(t: AnnotationTool) {
     setActiveTool(t);
     pdfRef.current?.setTool(t);
@@ -99,20 +106,37 @@ export default function ViewerScreen() {
     if (file) saveAnnotation(file.id, page, data);
   }
 
-  // ── Favorite ───────────────────────────────────────────────────────────
+  // ── Thumbnails ────────────────────────────────────────────────────────────
+  function handleThumbnailReady(page: number, dataUrl: string) {
+    setThumbnails((prev) => ({ ...prev, [page]: dataUrl }));
+  }
+
+  function handleThumbPageSelect(page: number) {
+    pdfRef.current?.goToPage(page);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  function toggleThumbs() {
+    setShowThumbs((v) => !v);
+    if (showToolbar) setShowToolbar(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  // ── Favorite ─────────────────────────────────────────────────────────────
   function handleFavorite() {
     if (!file) return;
     toggleFavorite(file.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }
 
-  // ── Search ─────────────────────────────────────────────────────────────
+  // ── Search ───────────────────────────────────────────────────────────────
   function openSearch() {
     setIsSearching(true);
     setSearchQuery("");
     setSearchResults([]);
     setSearchResultIdx(0);
     setShowToolbar(false);
+    setShowThumbs(false);
     setTimeout(() => searchInputRef.current?.focus(), 100);
   }
 
@@ -148,7 +172,7 @@ export default function ViewerScreen() {
   }
 
   function goToPrevResult() {
-    if (searchResults.length === 0) return;
+    if (!searchResults.length) return;
     const idx = searchResultIdx === 0 ? searchResults.length - 1 : searchResultIdx - 1;
     setSearchResultIdx(idx);
     pdfRef.current?.gotoSearchResult?.(idx);
@@ -156,14 +180,14 @@ export default function ViewerScreen() {
   }
 
   function goToNextResult() {
-    if (searchResults.length === 0) return;
+    if (!searchResults.length) return;
     const idx = (searchResultIdx + 1) % searchResults.length;
     setSearchResultIdx(idx);
     pdfRef.current?.gotoSearchResult?.(idx);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
-  // ── Render guard ───────────────────────────────────────────────────────
+  // ── Guard ─────────────────────────────────────────────────────────────────
   if (!file) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -181,16 +205,30 @@ export default function ViewerScreen() {
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
   const hasResults = searchResults.length > 0;
-  const noResults = isSearching && !searchPending && searchQuery.length > 0 && searchResults.length === 0;
+  const noResults =
+    isSearching && !searchPending && searchQuery.length > 0 && !hasResults;
+
+  // Bottom stacking: thumbs + toolbar
+  const bottomExtra =
+    (showThumbs ? STRIP_H : 0) + (showToolbar ? 60 : 0) + bottomInset;
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? "#1C1C1E" : "#E8E8E8" }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: isDark ? "#1C1C1E" : "#E8E8E8" },
+      ]}
+    >
       {Platform.OS !== "web" && (
         <StatusBar barStyle="light-content" hidden={!chromVisible} />
       )}
 
-      {/* PDF area — tap to toggle chrome */}
-      <TouchableOpacity activeOpacity={1} onPress={toggleChrom} style={styles.pdfArea}>
+      {/* PDF area */}
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={toggleChrom}
+        style={styles.pdfArea}
+      >
         <PDFViewer
           ref={pdfRef}
           fileUri={file.uri}
@@ -200,10 +238,11 @@ export default function ViewerScreen() {
           onLoaded={handleLoaded}
           onAnnotationSaved={handleAnnotationSaved}
           onSearchDone={handleSearchDone}
+          onThumbnailReady={handleThumbnailReady}
         />
       </TouchableOpacity>
 
-      {/* ── Top header ── */}
+      {/* ── Top header ──────────────────────────────────────────────────── */}
       <Animated.View
         style={[
           styles.header,
@@ -222,16 +261,18 @@ export default function ViewerScreen() {
         ]}
         pointerEvents={chromVisible ? "auto" : "none"}
       >
-        {/* Back button */}
         <TouchableOpacity
           onPress={isSearching ? closeSearch : () => router.back()}
           style={styles.headerBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Feather name={isSearching ? "x" : "chevron-left"} size={26} color="white" />
+          <Feather
+            name={isSearching ? "x" : "chevron-left"}
+            size={26}
+            color="white"
+          />
         </TouchableOpacity>
 
-        {/* Title or Search input */}
         {isSearching ? (
           <View style={styles.searchInputWrap}>
             <Feather name="search" size={14} color="rgba(255,255,255,0.6)" />
@@ -246,7 +287,8 @@ export default function ViewerScreen() {
               autoCorrect={false}
               autoCapitalize="none"
               onSubmitEditing={() => {
-                if (searchQuery.trim()) pdfRef.current?.search?.(searchQuery.trim());
+                if (searchQuery.trim())
+                  pdfRef.current?.search?.(searchQuery.trim());
               }}
             />
             {searchQuery.length > 0 && (
@@ -261,45 +303,51 @@ export default function ViewerScreen() {
           </Text>
         )}
 
-        {/* Right actions */}
-        <View style={styles.headerActions}>
-          {!isSearching && (
-            <>
-              <TouchableOpacity onPress={openSearch} style={styles.headerBtn}>
-                <Feather name="search" size={20} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleFavorite} style={styles.headerBtn}>
-                <Feather
-                  name="bookmark"
-                  size={20}
-                  color={file.isFavorite ? "#FBBF24" : "white"}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setShowToolbar((s) => !s)}
-                style={styles.headerBtn}
-              >
-                <Feather
-                  name="edit-2"
-                  size={18}
-                  color={showToolbar ? "#60A5FA" : "white"}
-                />
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        {!isSearching && (
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={openSearch} style={styles.headerBtn}>
+              <Feather name="search" size={19} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={toggleThumbs}
+              style={styles.headerBtn}
+            >
+              <Feather
+                name="grid"
+                size={18}
+                color={showThumbs ? "#60A5FA" : "white"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleFavorite} style={styles.headerBtn}>
+              <Feather
+                name="bookmark"
+                size={19}
+                color={file.isFavorite ? "#FBBF24" : "white"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowToolbar((s) => !s);
+                if (showThumbs) setShowThumbs(false);
+              }}
+              style={styles.headerBtn}
+            >
+              <Feather
+                name="edit-2"
+                size={17}
+                color={showToolbar ? "#60A5FA" : "white"}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
       </Animated.View>
 
-      {/* ── Search result bar (below header) ── */}
+      {/* ── Search results bar ────────────────────────────────────────────── */}
       {isSearching && chromVisible && (
         <Animated.View
           style={[
             styles.searchBar,
-            {
-              top: topInset + 56,
-              opacity: chromAnim,
-              backgroundColor: "rgba(0,0,0,0.75)",
-            },
+            { top: topInset + 56, opacity: chromAnim, backgroundColor: "rgba(0,0,0,0.75)" },
           ]}
           pointerEvents="auto"
         >
@@ -317,7 +365,7 @@ export default function ViewerScreen() {
               <Text style={styles.searchResultCount}>
                 {searchResultIdx + 1} of {searchResults.length}{" "}
                 {searchResults.length === 1 ? "page" : "pages"}
-                {" · "}
+                {"  ·  "}
                 <Text style={{ color: "#FCD34D" }}>
                   {searchResults[searchResultIdx]?.count ?? 0} match
                   {(searchResults[searchResultIdx]?.count ?? 0) !== 1 ? "es" : ""}
@@ -328,36 +376,49 @@ export default function ViewerScreen() {
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.searchStatus}>
-              Type to search within this PDF
-            </Text>
+            <Text style={styles.searchStatus}>Type to search within this PDF</Text>
           )}
         </Animated.View>
       )}
 
-      {/* ── Page indicator ── */}
+      {/* ── Page indicator ───────────────────────────────────────────────── */}
       {totalPages > 0 && chromVisible && !isSearching && (
         <Animated.View
           style={[
             styles.pageIndicator,
-            {
-              bottom: bottomInset + (showToolbar ? 68 : 16),
-              opacity: chromAnim,
-            },
+            { bottom: bottomExtra + 14, opacity: chromAnim },
           ]}
         >
           <PageIndicator current={currentPage} total={totalPages} />
         </Animated.View>
       )}
 
-      {/* ── Annotation toolbar ── */}
+      {/* ── Annotation toolbar ────────────────────────────────────────────── */}
       {showToolbar && !isSearching && (
-        <View style={[styles.toolbar, { bottom: bottomInset }]}>
+        <View
+          style={[
+            styles.toolbar,
+            { bottom: (showThumbs ? STRIP_H : 0) + bottomInset },
+          ]}
+        >
           <AnnotationToolbar
             activeTool={activeTool}
             activeColor={activeColor}
             onToolChange={handleTool}
             onColorChange={handleColor}
+          />
+        </View>
+      )}
+
+      {/* ── Thumbnail strip (slides in from bottom) ───────────────────────── */}
+      {totalPages > 0 && (
+        <View style={[styles.thumbsWrap, { bottom: bottomInset }]}>
+          <ThumbnailStrip
+            thumbnails={thumbnails}
+            totalPages={totalPages}
+            currentPage={currentPage}
+            visible={showThumbs}
+            onPageSelect={handleThumbPageSelect}
           />
         </View>
       )}
@@ -371,7 +432,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   backLink: { marginTop: 12, padding: 8 },
 
-  // Header
   header: {
     position: "absolute",
     left: 0,
@@ -379,11 +439,11 @@ const styles = StyleSheet.create({
     height: 56,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     backgroundColor: "rgba(0,0,0,0.62)",
   },
   headerBtn: {
-    width: 44,
+    width: 42,
     height: 46,
     alignItems: "center",
     justifyContent: "center",
@@ -391,14 +451,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     color: "white",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
     fontFamily: "Inter_600SemiBold",
     textAlign: "center",
   },
   headerActions: { flexDirection: "row", alignItems: "center" },
 
-  // Search input in header
   searchInputWrap: {
     flex: 1,
     flexDirection: "row",
@@ -418,7 +477,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
 
-  // Search results bar below header
   searchBar: {
     position: "absolute",
     left: 0,
@@ -451,14 +509,18 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
 
-  // Page indicator
   pageIndicator: {
     position: "absolute",
     right: 16,
   },
 
-  // Annotation toolbar
   toolbar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+  },
+
+  thumbsWrap: {
     position: "absolute",
     left: 0,
     right: 0,

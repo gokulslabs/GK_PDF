@@ -47,7 +47,7 @@ export const getPdfViewerHtml = (darkMode: boolean): string => {
       transition: box-shadow 0.2s;
     }
     .page-wrap.search-match {
-      box-shadow: 0 0 0 2px #FBBF24, 0 2px 16px rgba(0,0,0,${darkMode ? "0.55" : "0.18"});
+      box-shadow: 0 0 0 2.5px #FBBF24, 0 2px 16px rgba(0,0,0,${darkMode ? "0.55" : "0.18"});
     }
     .pdf-cv { display: block; }
     .srch-cv {
@@ -92,17 +92,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 var pdfDoc = null, numPages = 0;
 var tool = 'none', drawColor = '#FFEB3B';
 var drawings = {};
-var drawing = false, activeCvs = null, lastPt = null;
+var drawing = false, activeCvs = null;
 
 // Text index: page → [{str, x, y, w, h}] in CSS px
 var textIndex = {};
-// Search state
-var searchResults = []; // [{page, rects:[{x,y,w,h}]}]
+// Search
+var searchResults = [];
 var currentSearchIdx = -1;
 var currentQuery = '';
-
-// Page render meta: page → {cssW, cssH, dpr}
-var pageMeta = {};
 
 // ── RN Bridge ─────────────────────────────────────────────────────────────
 function rn(data) {
@@ -113,16 +110,16 @@ function recv(raw) {
   var msg;
   try { msg = JSON.parse(raw); } catch(e) { return; }
   switch(msg.type) {
-    case 'LOAD':   loadPDF(msg.data);           break;
-    case 'TOOL':   tool = msg.value;            break;
-    case 'COLOR':  drawColor = msg.value;       break;
-    case 'GOTO':   goto(msg.page);              break;
-    case 'DARK':   applyDark(msg.value);        break;
-    case 'CLEAR':  clearAnnot(msg.page);        break;
-    case 'RESTORE': restoreAnnot(msg.page, msg.data); break;
-    case 'SEARCH': doSearch(msg.query);         break;
-    case 'SEARCH_GOTO': gotoResult(msg.index);  break;
-    case 'SEARCH_CLEAR': clearSearch();         break;
+    case 'LOAD':         loadPDF(msg.data);              break;
+    case 'TOOL':         tool = msg.value;               break;
+    case 'COLOR':        drawColor = msg.value;          break;
+    case 'GOTO':         goto(msg.page);                 break;
+    case 'DARK':         applyDark(msg.value);           break;
+    case 'CLEAR':        clearAnnot(msg.page);           break;
+    case 'RESTORE':      restoreAnnot(msg.page, msg.data); break;
+    case 'SEARCH':       doSearch(msg.query);            break;
+    case 'SEARCH_GOTO':  gotoResult(msg.index);          break;
+    case 'SEARCH_CLEAR': clearSearch();                  break;
   }
 }
 
@@ -152,12 +149,14 @@ async function loadPDF(b64) {
     rn({ type: 'LOADED', pages: numPages });
     await renderAll();
     setupScroll();
+    // Generate thumbnails after main render (non-blocking)
+    renderThumbs();
   } catch(e) {
     showErr(String(e && e.message ? e.message : e));
   }
 }
 
-// ── Render all pages ───────────────────────────────────────────────────────
+// ── Render full pages ──────────────────────────────────────────────────────
 async function renderAll() {
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
   var maxW = window.innerWidth - 16;
@@ -173,8 +172,6 @@ async function renderPage(n, dpr, maxW) {
   var vp = page.getViewport({ scale: sc });
   var cssW = Math.round(vp.width / dpr);
   var cssH = Math.round(vp.height / dpr);
-
-  pageMeta[n] = { cssW: cssW, cssH: cssH, dpr: dpr, vp: vp };
 
   // Wrapper
   var wrap = document.createElement('div');
@@ -192,11 +189,11 @@ async function renderPage(n, dpr, maxW) {
   wrap.appendChild(cv);
 
   // Search highlight canvas
-  var sc_cv = document.createElement('canvas');
-  sc_cv.className = 'srch-cv';
-  sc_cv.width = cssW; sc_cv.height = cssH;
-  sc_cv.style.width = cssW + 'px'; sc_cv.style.height = cssH + 'px';
-  wrap.appendChild(sc_cv);
+  var scv = document.createElement('canvas');
+  scv.className = 'srch-cv';
+  scv.width = cssW; scv.height = cssH;
+  scv.style.width = cssW + 'px'; scv.style.height = cssH + 'px';
+  wrap.appendChild(scv);
 
   // Annotation canvas
   var av = document.createElement('canvas');
@@ -212,10 +209,10 @@ async function renderPage(n, dpr, maxW) {
   if (DARK) { ctx.filter = 'invert(1) hue-rotate(180deg)'; }
   await page.render({ canvasContext: ctx, viewport: vp }).promise;
 
-  // Build text index for this page
+  // Build text index
   await buildTextIndex(n, page, vp, dpr);
 
-  // Restore saved annotation
+  // Restore annotation
   if (drawings[n]) {
     var img = new Image();
     img.onload = function() { av.getContext('2d').drawImage(img, 0, 0); };
@@ -225,6 +222,36 @@ async function renderPage(n, dpr, maxW) {
   setupDraw(av, n);
 }
 
+// ── Thumbnails ─────────────────────────────────────────────────────────────
+var THUMB_W = 68;
+
+async function renderThumbs() {
+  for (var n = 1; n <= numPages; n++) {
+    await renderThumb(n);
+  }
+}
+
+async function renderThumb(n) {
+  try {
+    var page = await pdfDoc.getPage(n);
+    var vp0 = page.getViewport({ scale: 1 });
+    var scale = THUMB_W / vp0.width;
+    var vp = page.getViewport({ scale: scale });
+    var cv = document.createElement('canvas');
+    cv.width = Math.round(vp.width);
+    cv.height = Math.round(vp.height);
+    var ctx = cv.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    rn({
+      type: 'THUMB',
+      page: n,
+      data: cv.toDataURL('image/jpeg', 0.6),
+      w: cv.width,
+      h: cv.height
+    });
+  } catch(e) {}
+}
+
 // ── Text Index ─────────────────────────────────────────────────────────────
 async function buildTextIndex(n, page, vp, dpr) {
   try {
@@ -232,19 +259,19 @@ async function buildTextIndex(n, page, vp, dpr) {
     var items = [];
     tc.items.forEach(function(item) {
       if (!item.str) return;
-      // Transform item from user space → canvas pixels
       var tx = pdfjsLib.Util.transform(vp.transform, item.transform);
-      // tx[4], tx[5] = canvas position of text baseline origin
-      // Font size in canvas px = magnitude of the y-column of tx
       var fsPx = Math.sqrt(tx[2] * tx[2] + tx[3] * tx[3]);
       if (fsPx === 0) fsPx = Math.abs(tx[0]);
-      var wPx = item.width > 0 ? item.width * Math.abs(tx[0] / (item.transform[0] || 1)) : fsPx * item.str.length * 0.5;
-      // Convert to CSS px
-      var x = tx[4] / dpr;
-      var y = (tx[5] - fsPx) / dpr;
-      var w = wPx / dpr;
-      var h = (fsPx * 1.25) / dpr;
-      items.push({ str: item.str, x: x, y: y, w: Math.max(w, 4), h: Math.max(h, 6) });
+      var wPx = item.width > 0
+        ? item.width * Math.abs(tx[0] / (item.transform[0] || 1))
+        : fsPx * item.str.length * 0.5;
+      items.push({
+        str: item.str,
+        x: tx[4] / dpr,
+        y: (tx[5] - fsPx) / dpr,
+        w: Math.max(wPx / dpr, 4),
+        h: Math.max((fsPx * 1.25) / dpr, 6)
+      });
     });
     textIndex[n] = items;
   } catch(e) {
@@ -255,7 +282,7 @@ async function buildTextIndex(n, page, vp, dpr) {
 // ── Search ─────────────────────────────────────────────────────────────────
 async function doSearch(query) {
   clearSearch();
-  if (!pdfDoc || !query || query.trim() === '') {
+  if (!pdfDoc || !query || !query.trim()) {
     rn({ type: 'SEARCH_DONE', results: [], total: 0 });
     return;
   }
@@ -265,25 +292,18 @@ async function doSearch(query) {
 
   for (var n = 1; n <= numPages; n++) {
     var items = textIndex[n] || [];
-    // Build full text and find matches in it
-    var pageItems = items.filter(function(it) {
+    var matched = items.filter(function(it) {
       return it.str.toLowerCase().indexOf(lq) !== -1;
     });
-    // Also check concatenated text for cross-item matches
-    if (pageItems.length === 0) {
-      var fullText = items.map(function(i) { return i.str; }).join('');
-      if (fullText.toLowerCase().indexOf(lq) !== -1) {
-        // Approximate: mark all items on page
-        pageItems = items;
-      }
+    if (matched.length === 0) {
+      var full = items.map(function(i) { return i.str; }).join('');
+      if (full.toLowerCase().indexOf(lq) !== -1) matched = items;
     }
-
-    if (pageItems.length > 0) {
-      var rects = pageItems.map(function(it) {
+    if (matched.length > 0) {
+      results.push({ page: n, count: matched.length, rects: matched.map(function(it) {
         return { x: it.x, y: it.y, w: it.w, h: it.h };
-      });
-      results.push({ page: n, count: pageItems.length, rects: rects });
-      drawSearchHighlights(n, rects);
+      })});
+      drawSearchHighlights(n, results[results.length - 1].rects);
     }
   }
 
@@ -293,22 +313,17 @@ async function doSearch(query) {
     results: results.map(function(r) { return { page: r.page, count: r.count }; }),
     total: results.length
   });
-
-  // Auto-navigate to first result
-  if (results.length > 0) {
-    currentSearchIdx = 0;
-    goto(results[0].page);
-  }
+  if (results.length > 0) { currentSearchIdx = 0; goto(results[0].page); }
 }
 
 function drawSearchHighlights(n, rects) {
   var wrap = document.getElementById('pg' + n);
   if (!wrap) return;
   wrap.classList.add('search-match');
-  var sc_cv = wrap.querySelector('.srch-cv');
-  if (!sc_cv) return;
-  var ctx = sc_cv.getContext('2d');
-  ctx.clearRect(0, 0, sc_cv.width, sc_cv.height);
+  var scv = wrap.querySelector('.srch-cv');
+  if (!scv) return;
+  var ctx = scv.getContext('2d');
+  ctx.clearRect(0, 0, scv.width, scv.height);
   ctx.fillStyle = 'rgba(251, 191, 36, 0.38)';
   ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
   ctx.lineWidth = 1;
@@ -319,17 +334,13 @@ function drawSearchHighlights(n, rects) {
 }
 
 function clearSearch() {
-  currentQuery = '';
-  searchResults = [];
-  currentSearchIdx = -1;
+  currentQuery = ''; searchResults = []; currentSearchIdx = -1;
   for (var n = 1; n <= numPages; n++) {
     var wrap = document.getElementById('pg' + n);
     if (!wrap) continue;
     wrap.classList.remove('search-match');
-    var sc_cv = wrap.querySelector('.srch-cv');
-    if (sc_cv) {
-      sc_cv.getContext('2d').clearRect(0, 0, sc_cv.width, sc_cv.height);
-    }
+    var scv = wrap.querySelector('.srch-cv');
+    if (scv) scv.getContext('2d').clearRect(0, 0, scv.width, scv.height);
   }
 }
 
@@ -359,7 +370,6 @@ function setupDraw(cv, n) {
     var p = pt(e.touches[0]);
     applyStyle(ctx);
     ctx.beginPath(); ctx.moveTo(p.x, p.y);
-    lastPt = p;
   }, { passive: false });
 
   cv.addEventListener('touchmove', function(e) {
@@ -367,7 +377,6 @@ function setupDraw(cv, n) {
     e.preventDefault();
     var p = pt(e.touches[0]);
     ctx.lineTo(p.x, p.y); ctx.stroke();
-    lastPt = p;
   }, { passive: false });
 
   function end() {
@@ -377,7 +386,6 @@ function setupDraw(cv, n) {
     drawings[n] = cv.toDataURL('image/png');
     rn({ type: 'ANNOT', page: n, data: drawings[n] });
   }
-
   cv.addEventListener('touchend', end, { passive: true });
   cv.addEventListener('touchcancel', end, { passive: true });
 }
