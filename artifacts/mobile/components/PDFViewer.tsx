@@ -5,7 +5,7 @@ import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 import { getPdfViewerHtml } from "@/constants/pdfHtml";
 import { useColors } from "@/hooks/useColors";
-import { AnnotationTool, StickyNote } from "@/types/pdf";
+import { AnnotationTool, ShapeType, StickyNote } from "@/types/pdf";
 
 interface SearchResult {
   page: number;
@@ -22,6 +22,7 @@ export interface PDFViewerRef {
   search: (query: string) => void;
   clearSearch: () => void;
   gotoSearchResult: (index: number) => void;
+  setShapeType: (type: ShapeType) => void;
   loadNotes: (notes: StickyNote[]) => void;
   addNote: (note: StickyNote) => void;
   updateNote: (id: string, color: string, text: string) => void;
@@ -109,6 +110,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       search: (query) => inject({ type: "SEARCH", query }),
       clearSearch: () => inject({ type: "SEARCH_CLEAR" }),
       gotoSearchResult: (index) => inject({ type: "SEARCH_GOTO", index }),
+      setShapeType: (value) => inject({ type: "SHAPE_TYPE", value }),
       loadNotes: (notes) => inject({ type: "LOAD_NOTES", notes }),
       addNote: (note) => inject({ type: "ADD_NOTE", note }),
       updateNote: (id, color, text) => inject({ type: "UPDATE_NOTE", id, color, text }),

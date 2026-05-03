@@ -29,7 +29,8 @@ export interface StickyNote {
   createdAt: number;
 }
 
-export type AnnotationTool = "none" | "draw" | "highlight" | "underline" | "strikethrough" | "eraser";
+export type AnnotationTool = "none" | "draw" | "highlight" | "underline" | "strikethrough" | "shape" | "eraser";
+export type ShapeType = "line" | "rect" | "circle";
 
 export interface SearchResult {
   page: number;

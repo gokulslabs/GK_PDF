@@ -137,6 +137,7 @@ var textIndex = {};
 var searchResults = [], currentSearchIdx = -1;
 var notes = {};         // id → {id, page, x, y, color, text}
 var pageSize = {};      // page → {cssW, cssH}
+var shapeType = 'rect'; // 'line' | 'rect' | 'circle'
 
 // ── RN Bridge ────────────────────────────────────────────────────────────
 function rn(data) {
@@ -156,6 +157,7 @@ function recv(raw) {
     case 'SEARCH':       doSearch(msg.query);            break;
     case 'SEARCH_GOTO':  gotoResult(msg.index);          break;
     case 'SEARCH_CLEAR': clearSearch();                  break;
+    case 'SHAPE_TYPE':   shapeType = msg.value;           break;
     case 'LOAD_NOTES':   loadNotes(msg.notes);           break;
     case 'ADD_NOTE':     addNote(msg.note);              break;
     case 'UPDATE_NOTE':  updateNote(msg.id, msg.color, msg.text); break;
@@ -432,28 +434,61 @@ function setupLongPress(wrap, n, cssW, cssH) {
 }
 
 // ── Annotation Drawing ────────────────────────────────────────────────────
+var shapeStart = null;
+var shapeSnapshot = null;
+
 function setupDraw(cv, n) {
   var ctx = cv.getContext('2d');
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
   function pt(t) {
     var r = cv.getBoundingClientRect();
     return { x:(t.clientX-r.left)*(cv.width/r.width), y:(t.clientY-r.top)*(cv.height/r.height) };
   }
+
   cv.addEventListener('touchstart', function(e) {
     if (tool === 'none') return;
     e.preventDefault(); e.stopPropagation();
+    if (tool === 'shape') {
+      shapeStart = pt(e.touches[0]);
+      shapeSnapshot = ctx.getImageData(0, 0, cv.width, cv.height);
+      activeCvs = cv;
+      return;
+    }
     drawing = true; activeCvs = cv;
     var p = pt(e.touches[0]); applyStyle(ctx); ctx.beginPath(); ctx.moveTo(p.x, p.y);
   }, { passive: false });
+
   cv.addEventListener('touchmove', function(e) {
-    if (!drawing || activeCvs !== cv) return;
+    if (activeCvs !== cv) return;
     e.preventDefault();
+    if (tool === 'shape' && shapeStart && shapeSnapshot) {
+      var p = pt(e.touches[0]);
+      ctx.putImageData(shapeSnapshot, 0, 0);
+      drawShape(ctx, shapeStart, p, true);
+      return;
+    }
+    if (!drawing) return;
     var p = pt(e.touches[0]); ctx.lineTo(p.x, p.y); ctx.stroke();
   }, { passive: false });
-  function end() {
-    if (!drawing || activeCvs !== cv) return;
+
+  function end(e) {
+    if (activeCvs !== cv) return;
+    if (tool === 'shape' && shapeStart && shapeSnapshot) {
+      var touch = e.changedTouches && e.changedTouches[0];
+      if (touch) {
+        var p = pt(touch);
+        ctx.putImageData(shapeSnapshot, 0, 0);
+        drawShape(ctx, shapeStart, p, false);
+      }
+      shapeStart = null; shapeSnapshot = null; activeCvs = null;
+      drawings[n] = cv.toDataURL('image/png');
+      rn({ type: 'ANNOT', page: n, data: drawings[n] });
+      return;
+    }
+    if (!drawing) return;
     drawing = false; activeCvs = null;
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.setLineDash([0]);
     drawings[n] = cv.toDataURL('image/png');
     rn({ type: 'ANNOT', page: n, data: drawings[n] });
   }
@@ -461,20 +496,40 @@ function setupDraw(cv, n) {
   cv.addEventListener('touchcancel', end, { passive: true });
 }
 
+function drawShape(ctx, start, end, preview) {
+  ctx.save();
+  ctx.strokeStyle = drawColor;
+  ctx.lineWidth = 2.5;
+  ctx.globalAlpha = preview ? 0.65 : 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.setLineDash(preview ? [6, 4] : [0]);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if (shapeType === 'line') {
+    ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y);
+  } else if (shapeType === 'rect') {
+    ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
+  } else if (shapeType === 'circle') {
+    var cx = (start.x + end.x) / 2, cy = (start.y + end.y) / 2;
+    var rx = Math.abs(end.x - start.x) / 2, ry = Math.abs(end.y - start.y) / 2;
+    ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function applyStyle(ctx) {
+  ctx.setLineDash([0]);
   if (tool === 'eraser') {
     ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 28; ctx.globalAlpha = 1;
   } else if (tool === 'highlight') {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 22; ctx.globalAlpha = 0.36;
   } else if (tool === 'underline') {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 2.5; ctx.globalAlpha = 1;
-    ctx.setLineDash([0]);
   } else if (tool === 'strikethrough') {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 2.5; ctx.globalAlpha = 1;
-    ctx.setLineDash([0]);
   } else {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 3; ctx.globalAlpha = 1;
-    ctx.setLineDash([0]);
   }
 }
 

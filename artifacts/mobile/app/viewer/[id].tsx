@@ -23,7 +23,7 @@ import PageIndicator from "@/components/PageIndicator";
 import ThumbnailStrip from "@/components/ThumbnailStrip";
 import { useLibrary } from "@/context/LibraryContext";
 import { useColors } from "@/hooks/useColors";
-import { AnnotationTool, StickyNote } from "@/types/pdf";
+import { AnnotationTool, ShapeType, StickyNote } from "@/types/pdf";
 
 interface SearchResult { page: number; count: number; }
 
@@ -51,6 +51,7 @@ export default function ViewerScreen() {
   const [showThumbs, setShowThumbs] = useState(false);
   const [activeTool, setActiveTool] = useState<AnnotationTool>("none");
   const [activeColor, setActiveColor] = useState("#FFEB3B");
+  const [shapeType, setShapeType] = useState<ShapeType>("rect");
   const [chromVisible, setChromVisible] = useState(true);
   const chromAnim = useRef(new Animated.Value(1)).current;
 
@@ -114,6 +115,10 @@ export default function ViewerScreen() {
   function handleColor(c: string) {
     setActiveColor(c);
     pdfRef.current?.setColor(c);
+  }
+  function handleShapeType(t: ShapeType) {
+    setShapeType(t);
+    pdfRef.current?.setShapeType?.(t);
   }
   function handleAnnotationSaved(page: number, data: string) {
     if (file) saveAnnotation(file.id, page, data);
@@ -394,8 +399,10 @@ export default function ViewerScreen() {
           <AnnotationToolbar
             activeTool={activeTool}
             activeColor={activeColor}
+            shapeType={shapeType}
             onToolChange={handleTool}
             onColorChange={handleColor}
+            onShapeTypeChange={handleShapeType}
           />
         </View>
       )}
