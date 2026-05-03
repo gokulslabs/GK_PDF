@@ -511,6 +511,31 @@ function showSnapRect(wrap,x1,y1,x2,y2){
 }
 function removeSnapRect(wrap){ var el=wrap.querySelector('.snap-rect'); if(el) el.remove(); }
 
+function mergeWordsIntoLines(words){
+  // Sort by top-y then left-x
+  var sorted=words.slice().sort(function(a,b){ return a.y-b.y||a.x-b.x; });
+  var lines=[];
+  sorted.forEach(function(it){
+    // Words whose y-centres are within half a typical line height are on the same line
+    var cy=it.y+it.h/2;
+    var line=null;
+    for(var i=0;i<lines.length;i++){
+      if(Math.abs(lines[i].cy-cy)<it.h*0.55){ line=lines[i]; break; }
+    }
+    if(line){
+      line.x=Math.min(line.x,it.x);
+      line.r=Math.max(line.r,it.x+it.w);
+      line.y=Math.min(line.y,it.y);
+      line.h=Math.max(line.h,it.h);
+      // recalc centre so staggered baselines average out
+      line.cy=line.y+line.h/2;
+    } else {
+      lines.push({cy:cy,x:it.x,r:it.x+it.w,y:it.y,h:it.h});
+    }
+  });
+  return lines; // [{x, r, y, h}]
+}
+
 function commitSnap(n,cv,cssW,cssH,x1,y1,x2,y2){
   var items=textIndex[n]||[];
   var minX=Math.min(x1,x2)-4, maxX=Math.max(x1,x2)+4;
@@ -519,30 +544,37 @@ function commitSnap(n,cv,cssW,cssH,x1,y1,x2,y2){
     return it.x<maxX&&it.x+it.w>minX&&it.y<maxY&&it.y+it.h>minY;
   });
   var ctx=cv.getContext('2d');
-  // Scale: CSS → canvas pixels
   var sx=cv.width/cssW, sy=cv.height/cssH;
   ctx.save();
   ctx.strokeStyle=drawColor; ctx.fillStyle=drawColor;
+
   if(matched.length===0){
-    // No text found — draw rect in selection area
+    // No text under selection — fall back to freehand rect / line
     if(tool==='highlight'){
-      ctx.globalAlpha=0.38; ctx.fillRect(minX*sx,minY*sy,(maxX-minX)*sx,(maxY-minY)*sy);
+      ctx.globalAlpha=0.38;
+      ctx.fillRect(minX*sx,minY*sy,(maxX-minX)*sx,(maxY-minY)*sy);
     } else {
       ctx.globalAlpha=1; ctx.lineWidth=2.5*sx; ctx.lineCap='round';
-      var ly=tool==='underline'?(maxY*sy):((minY+maxY)/2*sy);
-      ctx.beginPath(); ctx.moveTo(minX*sx,ly); ctx.lineTo(maxX*sx,ly); ctx.stroke();
+      var fallY=tool==='underline'?(maxY*sy):((minY+maxY)/2*sy);
+      ctx.beginPath(); ctx.moveTo(minX*sx,fallY); ctx.lineTo(maxX*sx,fallY); ctx.stroke();
     }
   } else {
-    matched.forEach(function(it){
-      var ix=it.x*sx,iy=it.y*sy,iw=it.w*sx,ih=it.h*sy;
+    // Merge words into per-line bounding boxes → clean phrase highlight
+    var lines=mergeWordsIntoLines(matched);
+    lines.forEach(function(ln){
+      var lx=ln.x*sx, ly=ln.y*sy, lw=(ln.r-ln.x)*sx, lh=ln.h*sy;
       if(tool==='highlight'){
-        ctx.globalAlpha=0.38; ctx.fillRect(ix,iy,iw,ih);
+        ctx.globalAlpha=0.38;
+        ctx.fillRect(lx,ly,lw,lh);
       } else if(tool==='underline'){
         ctx.globalAlpha=1; ctx.lineWidth=2.5*sx; ctx.lineCap='round';
-        ctx.beginPath(); ctx.moveTo(ix,iy+ih); ctx.lineTo(ix+iw,iy+ih); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(lx,ly+lh); ctx.lineTo(lx+lw,ly+lh); ctx.stroke();
       } else {
+        // strikethrough
         ctx.globalAlpha=1; ctx.lineWidth=2.2*sx; ctx.lineCap='round';
-        ctx.beginPath(); var mid=iy+ih*0.55; ctx.moveTo(ix,mid); ctx.lineTo(ix+iw,mid); ctx.stroke();
+        ctx.beginPath();
+        var mid=ly+lh*0.55;
+        ctx.moveTo(lx,mid); ctx.lineTo(lx+lw,mid); ctx.stroke();
       }
     });
   }
