@@ -29,7 +29,7 @@ export interface StickyNote {
   createdAt: number;
 }
 
-export type AnnotationTool = "none" | "draw" | "highlight" | "eraser";
+export type AnnotationTool = "none" | "draw" | "highlight" | "underline" | "eraser";
 
 export interface SearchResult {
   page: number;

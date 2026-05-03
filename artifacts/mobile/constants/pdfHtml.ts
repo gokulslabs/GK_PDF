@@ -466,8 +466,12 @@ function applyStyle(ctx) {
     ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 28; ctx.globalAlpha = 1;
   } else if (tool === 'highlight') {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 22; ctx.globalAlpha = 0.36;
+  } else if (tool === 'underline') {
+    ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 2.5; ctx.globalAlpha = 1;
+    ctx.setLineDash([0]);
   } else {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 3; ctx.globalAlpha = 1;
+    ctx.setLineDash([0]);
   }
 }
 
