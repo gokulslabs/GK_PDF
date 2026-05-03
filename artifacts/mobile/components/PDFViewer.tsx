@@ -11,7 +11,14 @@ import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 import { getPdfViewerHtml } from "@/constants/pdfHtml";
 import { useColors } from "@/hooks/useColors";
-import { AnnotationTool, ShapeType, StickyNote } from "@/types/pdf";
+import {
+  AnnotationTool,
+  OutlineItem,
+  ShapeType,
+  StampType,
+  StickyNote,
+  ViewMode,
+} from "@/types/pdf";
 
 interface SearchResult {
   page: number;
@@ -29,10 +36,19 @@ export interface PDFViewerRef {
   clearSearch: () => void;
   gotoSearchResult: (index: number) => void;
   setShapeType: (type: ShapeType) => void;
+  setStampType: (type: StampType) => void;
   loadNotes: (notes: StickyNote[]) => void;
   addNote: (note: StickyNote) => void;
   updateNote: (id: string, color: string, text: string) => void;
   deleteNote: (id: string) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  zoomFitWidth: () => void;
+  zoomFitPage: () => void;
+  zoomActual: () => void;
+  rotatePage: (delta?: number) => void;
+  setViewMode: (mode: ViewMode) => void;
+  setPassword: (password: string) => void;
 }
 
 interface Props {
@@ -47,12 +63,13 @@ interface Props {
   onThumbnailReady?: (page: number, dataUrl: string, w: number, h: number) => void;
   onLongPress?: (page: number, x: number, y: number) => void;
   onNoteTap?: (noteId: string) => void;
+  onOutlineReady?: (items: OutlineItem[]) => void;
+  onScaleChange?: (percent: number) => void;
+  onPasswordRequired?: (retry: boolean) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Web-specific iframe renderer
-// Uses a plain <iframe> so we can use contentWindow.postMessage directly,
-// bypassing react-native-webview's unreliable web message bridge.
+// Web iframe renderer
 // ─────────────────────────────────────────────────────────────────────────────
 function WebIframePDFViewer({
   innerRef,
@@ -65,7 +82,6 @@ function WebIframePDFViewer({
 }) {
   useEffect(() => {
     function handler(e: MessageEvent) {
-      // Only accept messages from our own iframe
       if (innerRef.current && e.source === innerRef.current.contentWindow) {
         if (typeof e.data === "string") onMsg(e.data);
       }
@@ -104,14 +120,15 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       onThumbnailReady,
       onLongPress,
       onNoteTap,
+      onOutlineReady,
+      onScaleChange,
+      onPasswordRequired,
     },
     ref
   ) => {
     const colors = useColors();
 
-    // Native WebView ref
     const webRef = useRef<WebView>(null);
-    // Web iframe ref
     const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
     const [loading, setLoading] = useState(true);
@@ -163,38 +180,45 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       }
     }
 
-    // ── Bridge: send message to the viewer ──────────────────────────────────
+    // ── Bridge: send → viewer ────────────────────────────────────────────
     function inject(msg: object) {
       const payload = JSON.stringify(msg);
       if (Platform.OS === "web") {
-        // Web: directly post to iframe contentWindow
         const win = iframeRef.current?.contentWindow;
         if (win) win.postMessage(payload, "*");
       } else {
-        // Native: eval code in WebView
         const escaped = JSON.stringify(payload);
         webRef.current?.injectJavaScript(`recv(${escaped});true;`);
       }
     }
 
     useImperativeHandle(ref, () => ({
-      setTool: (tool) => inject({ type: "TOOL", value: tool }),
-      setColor: (color) => inject({ type: "COLOR", value: color }),
-      goToPage: (page) => inject({ type: "GOTO", page }),
-      setDarkMode: (dark) => inject({ type: "DARK", value: dark }),
-      clearPage: (page) => inject({ type: "CLEAR", page }),
-      restoreAnnotation: (page, data) => inject({ type: "RESTORE", page, data }),
-      search: (query) => inject({ type: "SEARCH", query }),
-      clearSearch: () => inject({ type: "SEARCH_CLEAR" }),
-      gotoSearchResult: (index) => inject({ type: "SEARCH_GOTO", index }),
-      setShapeType: (value) => inject({ type: "SHAPE_TYPE", value }),
-      loadNotes: (notes) => inject({ type: "LOAD_NOTES", notes }),
-      addNote: (note) => inject({ type: "ADD_NOTE", note }),
-      updateNote: (id, color, text) => inject({ type: "UPDATE_NOTE", id, color, text }),
-      deleteNote: (id) => inject({ type: "DELETE_NOTE", id }),
+      setTool:           (tool)         => inject({ type: "TOOL", value: tool }),
+      setColor:          (color)        => inject({ type: "COLOR", value: color }),
+      goToPage:          (page)         => inject({ type: "GOTO", page }),
+      setDarkMode:       (dark)         => inject({ type: "DARK", value: dark }),
+      clearPage:         (page)         => inject({ type: "CLEAR", page }),
+      restoreAnnotation: (page, data)   => inject({ type: "RESTORE", page, data }),
+      search:            (query)        => inject({ type: "SEARCH", query }),
+      clearSearch:       ()             => inject({ type: "SEARCH_CLEAR" }),
+      gotoSearchResult:  (index)        => inject({ type: "SEARCH_GOTO", index }),
+      setShapeType:      (value)        => inject({ type: "SHAPE_TYPE", value }),
+      setStampType:      (value)        => inject({ type: "STAMP_TYPE", value }),
+      loadNotes:         (notes)        => inject({ type: "LOAD_NOTES", notes }),
+      addNote:           (note)         => inject({ type: "ADD_NOTE", note }),
+      updateNote:        (id, c, t)     => inject({ type: "UPDATE_NOTE", id, color: c, text: t }),
+      deleteNote:        (id)           => inject({ type: "DELETE_NOTE", id }),
+      zoomIn:            ()             => inject({ type: "ZOOM_IN" }),
+      zoomOut:           ()             => inject({ type: "ZOOM_OUT" }),
+      zoomFitWidth:      ()             => inject({ type: "ZOOM_FIT_WIDTH" }),
+      zoomFitPage:       ()             => inject({ type: "ZOOM_FIT_PAGE" }),
+      zoomActual:        ()             => inject({ type: "ZOOM_ACTUAL" }),
+      rotatePage:        (delta = 90)   => inject({ type: "ROTATE", delta }),
+      setViewMode:       (mode)         => inject({ type: "VIEW_MODE", value: mode }),
+      setPassword:       (password)     => inject({ type: "SET_PASSWORD", value: password }),
     }));
 
-    // ── Bridge: receive message from the viewer ─────────────────────────────
+    // ── Bridge: receive ← viewer ────────────────────────────────────────
     function handleMsg(data: string) {
       try {
         const msg = JSON.parse(data);
@@ -212,24 +236,15 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
               inject({ type: "RESTORE", page: parseInt(page), data: d });
             });
             break;
-          case "PAGE":
-            onPageChange?.(msg.page);
-            break;
-          case "ANNOT":
-            onAnnotationSaved?.(msg.page, msg.data);
-            break;
-          case "SEARCH_DONE":
-            onSearchDone?.(msg.results ?? []);
-            break;
-          case "THUMB":
-            onThumbnailReady?.(msg.page, msg.data, msg.w, msg.h);
-            break;
-          case "LONG_PRESS":
-            onLongPress?.(msg.page, msg.x, msg.y);
-            break;
-          case "NOTE_TAP":
-            onNoteTap?.(msg.id);
-            break;
+          case "PAGE":           onPageChange?.(msg.page);                          break;
+          case "ANNOT":          onAnnotationSaved?.(msg.page, msg.data);           break;
+          case "SEARCH_DONE":    onSearchDone?.(msg.results ?? []);                 break;
+          case "THUMB":          onThumbnailReady?.(msg.page, msg.data, msg.w, msg.h); break;
+          case "LONG_PRESS":     onLongPress?.(msg.page, msg.x, msg.y);            break;
+          case "NOTE_TAP":       onNoteTap?.(msg.id);                              break;
+          case "OUTLINE":        onOutlineReady?.(msg.items ?? []);                break;
+          case "SCALE":          onScaleChange?.(msg.value);                       break;
+          case "PASSWORD_REQUIRED": onPasswordRequired?.(msg.retry ?? false);      break;
           case "ERROR":
             setError(msg.message);
             setLoading(false);
@@ -239,7 +254,6 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       } catch (_) {}
     }
 
-    // Adapter for native WebView's onMessage event shape
     function handleWebViewMessage(e: WebViewMessageEvent) {
       handleMsg(e.nativeEvent.data);
     }
@@ -258,11 +272,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       <View style={styles.container}>
         {html ? (
           Platform.OS === "web" ? (
-            <WebIframePDFViewer
-              innerRef={iframeRef}
-              html={html}
-              onMsg={handleMsg}
-            />
+            <WebIframePDFViewer innerRef={iframeRef} html={html} onMsg={handleMsg} />
           ) : (
             <WebView
               ref={webRef}
