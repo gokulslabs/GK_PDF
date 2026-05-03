@@ -49,6 +49,7 @@ export interface PDFViewerRef {
   rotatePage: (delta?: number) => void;
   setViewMode: (mode: ViewMode) => void;
   setPassword: (password: string) => void;
+  undo: () => void;
 }
 
 interface Props {
@@ -66,6 +67,7 @@ interface Props {
   onOutlineReady?: (items: OutlineItem[]) => void;
   onScaleChange?: (percent: number) => void;
   onPasswordRequired?: (retry: boolean) => void;
+  onUndoAvailable?: (canUndo: boolean) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,6 +125,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       onOutlineReady,
       onScaleChange,
       onPasswordRequired,
+      onUndoAvailable,
     },
     ref
   ) => {
@@ -216,6 +219,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       rotatePage:        (delta = 90)   => inject({ type: "ROTATE", delta }),
       setViewMode:       (mode)         => inject({ type: "VIEW_MODE", value: mode }),
       setPassword:       (password)     => inject({ type: "SET_PASSWORD", value: password }),
+      undo:              ()             => inject({ type: "UNDO" }),
     }));
 
     // ── Bridge: receive ← viewer ────────────────────────────────────────
@@ -245,6 +249,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           case "OUTLINE":        onOutlineReady?.(msg.items ?? []);                break;
           case "SCALE":          onScaleChange?.(msg.value);                       break;
           case "PASSWORD_REQUIRED": onPasswordRequired?.(msg.retry ?? false);      break;
+          case "UNDO_AVAILABLE": onUndoAvailable?.(msg.canUndo ?? false);          break;
           case "ERROR":
             setError(msg.message);
             setLoading(false);

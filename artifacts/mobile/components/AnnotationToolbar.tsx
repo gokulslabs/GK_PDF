@@ -6,7 +6,7 @@ import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "
 import { useColors } from "@/hooks/useColors";
 import { AnnotationTool, ShapeType, StampType } from "@/types/pdf";
 
-const ANNOTATION_COLORS = ["#FFEB3B", "#4CAF50", "#2196F3", "#FF80AB", "#FF5252", "#FF9800"];
+const QUICK_COLORS = ["#FFEB3B", "#4CAF50", "#2196F3", "#FF80AB", "#FF5252", "#FF9800"];
 
 interface ToolDef { tool: AnnotationTool; icon: string; label: string; }
 const TOOLS: ToolDef[] = [
@@ -43,10 +43,13 @@ interface Props {
   activeColor: string;
   shapeType: ShapeType;
   stampType: StampType;
+  canUndo: boolean;
   onToolChange: (tool: AnnotationTool) => void;
   onColorChange: (color: string) => void;
   onShapeTypeChange: (type: ShapeType) => void;
   onStampTypeChange: (type: StampType) => void;
+  onUndo: () => void;
+  onOpenColorPicker: () => void;
 }
 
 export default function AnnotationToolbar({
@@ -54,10 +57,13 @@ export default function AnnotationToolbar({
   activeColor,
   shapeType,
   stampType,
+  canUndo,
   onToolChange,
   onColorChange,
   onShapeTypeChange,
   onStampTypeChange,
+  onUndo,
+  onOpenColorPicker,
 }: Props) {
   const colors = useColors();
 
@@ -67,6 +73,19 @@ export default function AnnotationToolbar({
     <View style={[styles.container, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
       {/* Main tool row */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+
+        {/* Undo button — leftmost */}
+        <TouchableOpacity
+          onPress={() => { if (canUndo) { haptic(); onUndo(); } }}
+          style={[styles.toolBtn, styles.undoBtn, !canUndo && styles.undoBtnDisabled]}
+          disabled={!canUndo}
+        >
+          <Feather name="corner-up-left" size={18} color={canUndo ? colors.primary : colors.mutedForeground} />
+          <Text style={[styles.toolLabel, { color: canUndo ? colors.primary : colors.mutedForeground }]}>Undo</Text>
+        </TouchableOpacity>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
         {TOOLS.map(({ tool, icon, label }) => (
           <TouchableOpacity
             key={tool}
@@ -83,11 +102,23 @@ export default function AnnotationToolbar({
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-        {ANNOTATION_COLORS.map((c) => (
-          <TouchableOpacity key={c} onPress={() => { haptic(); onColorChange(c); }}
+        {/* Quick color dots */}
+        {QUICK_COLORS.map((c) => (
+          <TouchableOpacity
+            key={c}
+            onPress={() => { haptic(); onColorChange(c); }}
             style={[styles.colorDot, { backgroundColor: c }, activeColor === c && styles.colorDotActive]}
           />
         ))}
+
+        {/* Full palette opener */}
+        <TouchableOpacity
+          onPress={() => { haptic(); onOpenColorPicker(); }}
+          style={[styles.paletteBtn, { borderColor: activeColor }]}
+        >
+          <View style={[styles.paletteSwatch, { backgroundColor: activeColor }]} />
+          <Feather name="chevron-up" size={11} color={colors.mutedForeground} />
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Shape sub-row */}
@@ -131,9 +162,17 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 3, paddingRight: 4 },
   toolBtn: { alignItems: "center", justifyContent: "center", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, gap: 2, minWidth: 44 },
   toolLabel: { fontSize: 9, fontFamily: "Inter_500Medium", fontWeight: "500" },
+  undoBtn: { borderRadius: 8 },
+  undoBtnDisabled: { opacity: 0.35 },
   divider: { width: 1, height: 28, marginHorizontal: 4 },
   colorDot: { width: 22, height: 22, borderRadius: 11, marginHorizontal: 1 },
   colorDotActive: { borderWidth: 3, borderColor: "white", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 3 },
+  paletteBtn: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingHorizontal: 6, paddingVertical: 4,
+    borderRadius: 10, borderWidth: 2, marginLeft: 4,
+  },
+  paletteSwatch: { width: 16, height: 16, borderRadius: 8 },
   subRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, flexWrap: "wrap" },
   subLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginRight: 2 },
   subBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 7 },

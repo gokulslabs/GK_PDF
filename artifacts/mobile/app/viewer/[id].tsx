@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnnotationToolbar from "@/components/AnnotationToolbar";
+import ColorPickerModal from "@/components/ColorPickerModal";
 import NoteModal from "@/components/NoteModal";
 import OutlinePanel from "@/components/OutlinePanel";
 import PDFViewer, { PDFViewerRef } from "@/components/PDFViewer";
@@ -75,6 +76,10 @@ export default function ViewerScreen() {
   const [zoomPct, setZoomPct] = useState(100);
   const [showZoomControls, setShowZoomControls] = useState(false);
   const [viewMode, setViewModeState] = useState<ViewMode>("continuous");
+
+  // ── Undo / Color picker ───────────────────────────────────────────────
+  const [canUndo, setCanUndo] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // ── Thumbnails ────────────────────────────────────────────────────────
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
@@ -174,6 +179,10 @@ export default function ViewerScreen() {
   function handleColor(c: string) {
     setActiveColor(c);
     pdfRef.current?.setColor(c);
+  }
+  function handleUndo() {
+    pdfRef.current?.undo();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
   function handleShapeType(t: ShapeType) {
     setShapeType(t);
@@ -341,6 +350,7 @@ export default function ViewerScreen() {
           onOutlineReady={setOutlineItems}
           onScaleChange={setZoomPct}
           onPasswordRequired={handlePasswordRequired}
+          onUndoAvailable={setCanUndo}
         />
       </TouchableOpacity>
 
@@ -492,10 +502,13 @@ export default function ViewerScreen() {
             activeColor={activeColor}
             shapeType={shapeType}
             stampType={stampType}
+            canUndo={canUndo}
             onToolChange={handleTool}
             onColorChange={handleColor}
             onShapeTypeChange={handleShapeType}
             onStampTypeChange={handleStampType}
+            onUndo={handleUndo}
+            onOpenColorPicker={() => setShowColorPicker(true)}
           />
         </View>
       )}
@@ -528,6 +541,14 @@ export default function ViewerScreen() {
           />
         </>
       )}
+
+      {/* ── Color picker ────────────────────────────────────────────────── */}
+      <ColorPickerModal
+        visible={showColorPicker}
+        currentColor={activeColor}
+        onSelect={handleColor}
+        onClose={() => setShowColorPicker(false)}
+      />
 
       {/* ── Share sheet ─────────────────────────────────────────────────── */}
       {showShare && (

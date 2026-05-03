@@ -90,6 +90,8 @@ var userScale=1.0;      // user zoom multiplier
 var pageRotation=0;     // 0|90|180|270
 var viewMode='continuous';
 var pwdCb=null;
+var globalUndoStack=[];  // [{page, data}] state BEFORE each op
+var MAX_UNDO=20;
 
 // ── Bridge ─────────────────────────────────────────────────────────────────
 function rn(data){
@@ -124,6 +126,7 @@ function recv(raw){
     case 'ROTATE':         rotatePage(msg.delta||90);                break;
     case 'VIEW_MODE':      setViewMode(msg.value);                   break;
     case 'SET_PASSWORD':   if(pwdCb){ pwdCb(msg.value); pwdCb=null; } break;
+    case 'UNDO':           undoLast();                                break;
   }
 }
 window.addEventListener('message',function(e){ recv(e.data); });
@@ -655,17 +658,17 @@ function setupDraw(cv,n,cssW,cssH,wrap){
 
   function onStart(cx,cy){
     if(tool==='none') return;
-    if(tool==='textbox'){ var p=ptCSS(cx,cy); placeTextBox(n,p.x,p.y,cssW,cssH,wrap); return; }
-    if(tool==='stamp'){   var p=ptCSS(cx,cy); placeStamp(n,p.x,p.y,cssW,cssH); return; }
+    if(tool==='textbox'){ var p=ptCSS(cx,cy); pushUndo(n); placeTextBox(n,p.x,p.y,cssW,cssH,wrap); return; }
+    if(tool==='stamp'){   var p=ptCSS(cx,cy); pushUndo(n); placeStamp(n,p.x,p.y,cssW,cssH); return; }
     if(isSnapTool()){
-      var p=ptCSS(cx,cy); snapStart=p; activeCvs=cv;
+      var p=ptCSS(cx,cy); pushUndo(n); snapStart=p; activeCvs=cv;
       snapSnapshot=ctx.getImageData(0,0,cv.width,cv.height); return;
     }
     if(tool==='shape'){
-      shapeStart=ptC(cx,cy); activeCvs=cv;
+      pushUndo(n); shapeStart=ptC(cx,cy); activeCvs=cv;
       shapeSnapshot=ctx.getImageData(0,0,cv.width,cv.height); return;
     }
-    drawing=true; activeCvs=cv;
+    pushUndo(n); drawing=true; activeCvs=cv;
     var p=ptC(cx,cy); applyStyle(ctx); ctx.beginPath(); ctx.moveTo(p.x,p.y);
   }
   function onMove(cx,cy){
@@ -748,6 +751,31 @@ function applyStyle(ctx){
   } else {
     ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=drawColor; ctx.lineWidth=3; ctx.globalAlpha=1;
   }
+}
+
+// ── Undo ──────────────────────────────────────────────────────────────────
+function pushUndo(n){
+  globalUndoStack.push({page:n,data:drawings[n]||null});
+  if(globalUndoStack.length>MAX_UNDO) globalUndoStack.shift();
+  rn({type:'UNDO_AVAILABLE',canUndo:true});
+}
+function undoLast(){
+  if(!globalUndoStack.length){ rn({type:'UNDO_AVAILABLE',canUndo:false}); return; }
+  var entry=globalUndoStack.pop();
+  var n=entry.page;
+  var wrap=document.getElementById('pg'+n);
+  if(!wrap){ rn({type:'UNDO_AVAILABLE',canUndo:globalUndoStack.length>0}); return; }
+  var av=wrap.querySelector('.ann-cv'); if(!av) return;
+  var ctx=av.getContext('2d');
+  ctx.clearRect(0,0,av.width,av.height);
+  if(entry.data){
+    drawings[n]=entry.data;
+    var img=new Image(); img.onload=function(){ ctx.drawImage(img,0,0); }; img.src=entry.data;
+  } else {
+    delete drawings[n];
+  }
+  rn({type:'ANNOT',page:n,data:entry.data||null});
+  rn({type:'UNDO_AVAILABLE',canUndo:globalUndoStack.length>0});
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────
