@@ -1,0 +1,207 @@
+You are working on an EXISTING production-grade PDF Reader application.
+
+Your task is NOT to rebuild it.
+Your task is to refactor and enforce a unified neon purple design system + improve UX, without breaking existing functionality.
+
+---
+
+## 🔒 HARD RULES (CRITICAL)
+
+* DO NOT change business logic
+* DO NOT break PDF rendering engine
+* DO NOT remove existing features
+* ONLY refactor UI, styling, and UX flows
+* Maintain backward compatibility
+
+---
+
+## 🧠 STEP 1 — FULL AUDIT (MANDATORY FIRST)
+
+Analyze the entire codebase and output:
+
+1. All UI components (buttons, modals, toolbars, inputs, viewer UI)
+2. Styling methods used (CSS, Tailwind, inline styles, theme files)
+3. All inconsistencies in colors, spacing, typography
+4. UX issues:
+
+   * clutter
+   * confusing controls
+   * bad navigation
+   * poor touch targets
+
+Then create:
+→ A refactor plan (before writing any code)
+
+---
+
+## 🎨 STEP 2 — GLOBAL DESIGN SYSTEM IMPLEMENTATION
+
+Create a centralized design system:
+
+### tokens.ts / theme.ts
+
+Define:
+
+* colors
+* spacing
+* typography
+* border radius
+* shadows (neon glow)
+
+### COLOR SYSTEM
+
+Primary: #8B5CF6
+Accent: #A855F7
+Glow: rgba(139, 92, 246, 0.6)
+
+Background: #0B0B0F
+Surface: #111827
+Glass: rgba(255,255,255,0.05)
+
+Text Primary: #FFFFFF
+Text Secondary: #9CA3AF
+
+---
+
+## ✨ STEP 3 — ENFORCE UI RULES (GLOBAL)
+
+Apply across ALL components:
+
+* Replace all hardcoded colors → use tokens
+
+* Add neon glow ONLY to:
+
+  * active buttons
+  * selected tools
+  * focused inputs
+
+* Use glassmorphism:
+
+  * backdrop blur
+  * subtle borders
+  * transparent cards
+
+* Standardize:
+
+  * border radius (12–16px)
+  * padding scale
+  * spacing system
+
+---
+
+## ⚡ STEP 4 — COMPONENT REFACTORING
+
+Refactor these components:
+
+### Buttons
+
+* Gradient purple background
+* Glow on hover/press
+* Consistent sizing
+
+### Toolbar (PDF controls)
+
+* Floating glass bar
+* Minimal icons (no text clutter)
+* Active tool = glowing purple
+
+### PDF Viewer UI
+
+* Remove clutter overlays
+* Add subtle page indicator
+* Smooth transitions
+
+### Modals
+
+* Dark + blurred background
+* Centered with glow edges
+
+### Inputs / Annotation tools
+
+* Focus = purple border glow
+* Clean minimal styling
+
+---
+
+## 🧠 STEP 5 — UX IMPROVEMENTS (VERY IMPORTANT)
+
+Upgrade UX beyond standard PDF apps:
+
+### Navigation
+
+* Bottom floating toolbar (mobile)
+* Keyboard shortcuts (desktop)
+
+### Reading Experience
+
+* Distraction-free mode (hide UI)
+* Smooth fade UI in/out on tap
+
+### Smart Controls
+
+* Auto-hide toolbar after inactivity
+* Reappear on tap/mouse move
+
+### Annotation UX
+
+* One-tap highlight
+* Drag to annotate
+* Undo/redo stack
+
+---
+
+## 🚀 STEP 6 — PERFORMANCE SAFE REFACTOR
+
+* Ensure no re-renders of PDF pages due to styling
+* Memoize components where needed
+* Keep UI layer separate from rendering engine
+
+---
+
+## 🧪 STEP 7 — FINAL VALIDATION
+
+Test:
+
+* Large PDFs (200+ pages)
+* Zoom performance
+* Annotation stability
+* UI responsiveness
+
+Ensure:
+
+* No lag introduced
+* No crashes
+* No feature regressions
+
+---
+
+## 📦 OUTPUT REQUIRED
+
+1. Refactored UI components
+2. Centralized design system (tokens/theme)
+3. Updated styling across app
+4. UX improvements implemented
+5. Before vs After summary
+6. List of all files modified
+
+---
+
+## 🧠 DESIGN PHILOSOPHY
+
+The app should feel like:
+
+* 90% dark minimal UI
+* 10% neon highlights
+* Premium, futuristic, distraction-free reading tool
+
+Inspired by:
+
+* Adobe Acrobat (functionality)
+* Modern SaaS dashboards (UI)
+* Subtle cyberpunk aesthetics (NOT overdone)
+
+---
+
+IMPORTANT:
+Do everything incrementally and safely.
+Prioritize consistency + performance + usability over visual flashiness.
