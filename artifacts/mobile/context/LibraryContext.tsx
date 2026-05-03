@@ -6,6 +6,7 @@ import { Folder, PDFFile, StickyNote } from "@/types/pdf";
 interface LibraryContextType {
   files: PDFFile[];
   folders: Folder[];
+  loaded: boolean;
   addFile: (
     data: Omit<PDFFile, "id" | "createdAt" | "lastOpened" | "isFavorite" | "annotations" | "lastPage" | "notes">
   ) => Promise<void>;
@@ -25,6 +26,7 @@ const STORAGE_KEY = "@pdf_library_v1";
 export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const [files, setFiles] = useState<PDFFile[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     load();
@@ -35,14 +37,15 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
-        const loaded: PDFFile[] = (data.files || []).map((f: PDFFile) => ({
+        const parsed: PDFFile[] = (data.files || []).map((f: PDFFile) => ({
           ...f,
           notes: f.notes ?? {},
         }));
-        setFiles(loaded);
+        setFiles(parsed);
         setFolders(data.folders || []);
       }
     } catch (_) {}
+    setLoaded(true);
   }
 
   async function persist(nextFiles: PDFFile[], nextFolders: Folder[] = folders) {
@@ -170,6 +173,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       value={{
         files,
         folders,
+        loaded,
         addFile,
         removeFile,
         toggleFavorite,

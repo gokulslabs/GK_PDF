@@ -28,7 +28,7 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { files, addFile, removeFile, toggleFavorite } = useLibrary();
-  const { seeding } = useSeedLibrary();
+  const { seeding, seed } = useSeedLibrary();
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
 
@@ -207,15 +207,30 @@ export default function LibraryScreen() {
           </Text>
 
           {filtered.length === 0 ? (
-            <EmptyState
-              icon="file-text"
-              title={search ? "No results" : "No PDFs yet"}
-              subtitle={
-                search
-                  ? "Try a different search term"
-                  : 'Tap "Import PDF" to add your first document'
-              }
-            />
+            <View style={styles.emptyWrap}>
+              <EmptyState
+                icon="file-text"
+                title={search ? "No results" : "No PDFs yet"}
+                subtitle={
+                  search
+                    ? "Try a different search term"
+                    : 'Tap "Import PDF" to add your first document'
+                }
+              />
+              {!search && (
+                <TouchableOpacity
+                  onPress={seed}
+                  disabled={seeding}
+                  style={[styles.sampleBtn, { borderColor: colors.primary }]}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="book-open" size={15} color={colors.primary} />
+                  <Text style={[styles.sampleBtnText, { color: colors.primary }]}>
+                    {seeding ? "Loading sample…" : "Try Sample PDF"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ) : (
             filtered.map((file) => (
               <FileCard
@@ -291,4 +306,20 @@ const styles = StyleSheet.create({
   },
   progressMini: { height: 3, borderRadius: 2, overflow: "hidden" },
   progressMiniFill: { height: "100%", borderRadius: 2 },
+  emptyWrap: { alignItems: "center" },
+  sampleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 24,
+    borderWidth: 1.5,
+  },
+  sampleBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
+  },
 });

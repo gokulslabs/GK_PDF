@@ -6,15 +6,17 @@ import { Platform } from "react-native";
 import { useLibrary } from "@/context/LibraryContext";
 
 export function useSeedLibrary() {
-  const { files, addFile } = useLibrary();
+  const { files, loaded, addFile } = useLibrary();
   const attempted = useRef(false);
   const [seeding, setSeeding] = useState(false);
 
+  // Wait until AsyncStorage has finished loading before we decide to seed
   useEffect(() => {
+    if (!loaded) return;
     if (attempted.current || files.length > 0) return;
     attempted.current = true;
     seed();
-  }, [files.length]);
+  }, [loaded, files.length]);
 
   async function seed() {
     try {
@@ -26,7 +28,7 @@ export function useSeedLibrary() {
       await asset.downloadAsync();
 
       if (Platform.OS === "web") {
-        // On web, use the HTTP asset URL directly — no FileSystem needed
+        // On web, store the HTTP asset URL directly — no FileSystem needed
         await addFile({
           name: "HemeOnc Handbook 2022–2023.pdf",
           uri: asset.uri,
@@ -57,10 +59,11 @@ export function useSeedLibrary() {
       });
     } catch (e) {
       console.warn("Demo PDF seed failed:", e);
+      attempted.current = false; // allow retry
     } finally {
       setSeeding(false);
     }
   }
 
-  return { seeding };
+  return { seeding, seed };
 }
