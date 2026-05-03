@@ -25,6 +25,7 @@ const TOOLS: ToolDef[] = [
   { tool: "draw", icon: "pen-tool", label: "Draw" },
   { tool: "highlight", icon: "type", label: "Highlight" },
   { tool: "underline", icon: "underline", label: "Underline" },
+  { tool: "strikethrough", icon: "minus", label: "Strikethrough" },
   { tool: "eraser", icon: "delete", label: "Eraser" },
 ];
 

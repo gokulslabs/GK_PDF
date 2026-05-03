@@ -469,6 +469,9 @@ function applyStyle(ctx) {
   } else if (tool === 'underline') {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 2.5; ctx.globalAlpha = 1;
     ctx.setLineDash([0]);
+  } else if (tool === 'strikethrough') {
+    ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 2.5; ctx.globalAlpha = 1;
+    ctx.setLineDash([0]);
   } else {
     ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = 3; ctx.globalAlpha = 1;
     ctx.setLineDash([0]);
