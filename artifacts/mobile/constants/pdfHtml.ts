@@ -99,9 +99,26 @@ var globalUndoStack=[];  // [{page, data}] state BEFORE each op
 var MAX_UNDO=20;
 var selectionState=null; // {n,cv,cssW,cssH,x1,y1,x2,y2,snapshot,wrap,handleLeft,handleRight}
 var selDrag=null;        // {side,startClientX,startSelX}
+var docPinchDist0=null,docPinchScale0=null; // global pinch-to-zoom (tool=none mode)
 
-// ── Selection handle global drag listeners ──────────────────────────────────
+// ── Global touch/mouse handlers ────────────────────────────────────────────
+// Pinch-to-zoom (fires when tool=none; canvas pinch handlers cover tool-active mode)
+document.addEventListener('touchstart',function(e){
+  if(e.touches.length<2)return;
+  var dx=e.touches[0].clientX-e.touches[1].clientX;
+  var dy=e.touches[0].clientY-e.touches[1].clientY;
+  docPinchDist0=Math.sqrt(dx*dx+dy*dy); docPinchScale0=userScale;
+},{passive:true});
 document.addEventListener('touchmove',function(e){
+  // Pinch zoom takes priority
+  if(e.touches.length>=2&&docPinchDist0!==null){
+    e.preventDefault();
+    var dx=e.touches[0].clientX-e.touches[1].clientX;
+    var dy=e.touches[0].clientY-e.touches[1].clientY;
+    setUserScale(docPinchScale0*(Math.sqrt(dx*dx+dy*dy)/docPinchDist0));
+    return;
+  }
+  // Selection handle drag
   if(!selDrag||!selectionState)return;
   e.preventDefault();
   var dx=e.touches[0].clientX-selDrag.startClientX;
@@ -122,7 +139,10 @@ document.addEventListener('mousemove',function(e){
   else selectionState.x2=Math.max(newX,selectionState.x1+10);
   drawSnapPreview(); updateHandlePositions();
 });
-document.addEventListener('touchend',function(){selDrag=null;},{passive:true});
+document.addEventListener('touchend',function(e){
+  if(e.touches.length<2){docPinchDist0=null;docPinchScale0=null;}
+  selDrag=null;
+},{passive:true});
 document.addEventListener('mouseup',function(){selDrag=null;});
 
 // ── Bridge ─────────────────────────────────────────────────────────────────
@@ -837,6 +857,8 @@ function setupLongPress(wrap,n,cssW,cssH){
 function setupDraw(cv,n,cssW,cssH,wrap){
   var ctx=cv.getContext('2d');
   ctx.lineCap='round'; ctx.lineJoin='round';
+  var drawLastPt=null;                        // for smooth incremental strokes
+  var pinchDist0=null,pinchScale0=null;       // per-canvas pinch zoom state
 
   function ptC(cx,cy){ // client coords → canvas px
     var r=cv.getBoundingClientRect();
@@ -861,7 +883,7 @@ function setupDraw(cv,n,cssW,cssH,wrap){
       shapeSnapshot=ctx.getImageData(0,0,cv.width,cv.height); return;
     }
     pushUndo(n); drawing=true; activeCvs=cv;
-    var p=ptC(cx,cy); applyStyle(ctx); ctx.beginPath(); ctx.moveTo(p.x,p.y);
+    drawLastPt=ptC(cx,cy); applyStyle(ctx); ctx.beginPath(); ctx.moveTo(drawLastPt.x,drawLastPt.y);
   }
   function onMove(cx,cy){
     if(activeCvs!==cv) return;
@@ -871,8 +893,14 @@ function setupDraw(cv,n,cssW,cssH,wrap){
     if(tool==='shape'&&shapeStart&&shapeSnapshot){
       ctx.putImageData(shapeSnapshot,0,0); drawShape(ctx,shapeStart,ptC(cx,cy),true); return;
     }
-    if(!drawing) return;
-    var p=ptC(cx,cy); ctx.lineTo(p.x,p.y); ctx.stroke();
+    if(!drawing||!drawLastPt) return;
+    var p=ptC(cx,cy);
+    // Smooth quadratic curve through midpoints — O(1) per frame, no full re-stroke
+    var mid={x:(drawLastPt.x+p.x)/2,y:(drawLastPt.y+p.y)/2};
+    ctx.quadraticCurveTo(drawLastPt.x,drawLastPt.y,mid.x,mid.y);
+    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mid.x,mid.y);
+    drawLastPt=p;
   }
   function onEnd(cx,cy){
     if(activeCvs!==cv) return;
@@ -892,17 +920,53 @@ function setupDraw(cv,n,cssW,cssH,wrap){
       rn({type:'ANNOT',page:n,data:drawings[n]}); return;
     }
     if(!drawing) return;
-    drawing=false; activeCvs=null;
+    // Close the final segment to the actual lift point
+    if(drawLastPt){ctx.lineTo(drawLastPt.x,drawLastPt.y);ctx.stroke();}
+    drawing=false; activeCvs=null; drawLastPt=null;
     ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; ctx.setLineDash([0]);
     drawings[n]=cv.toDataURL('image/png');
     rn({type:'ANNOT',page:n,data:drawings[n]});
   }
 
-  // Touch
-  cv.addEventListener('touchstart',function(e){ if(tool==='none') return; e.preventDefault(); e.stopPropagation(); onStart(e.touches[0].clientX,e.touches[0].clientY); },{passive:false});
-  cv.addEventListener('touchmove', function(e){ if(activeCvs!==cv) return; e.preventDefault(); onMove(e.touches[0].clientX,e.touches[0].clientY); },{passive:false});
-  cv.addEventListener('touchend',  function(e){ if(activeCvs!==cv) return; var t=e.changedTouches[0]; onEnd(t.clientX,t.clientY); },{passive:true});
-  cv.addEventListener('touchcancel',function(e){ if(activeCvs!==cv) return; var t=e.changedTouches[0]; onEnd(t.clientX,t.clientY); },{passive:true});
+  // Touch — with integrated pinch-to-zoom (works even when an annotation tool is active)
+  cv.addEventListener('touchstart',function(e){
+    if(tool==='none') return;
+    if(e.touches.length>=2){
+      // Two fingers → pinch zoom; abort any ongoing stroke
+      e.preventDefault();
+      var dx=e.touches[0].clientX-e.touches[1].clientX;
+      var dy=e.touches[0].clientY-e.touches[1].clientY;
+      pinchDist0=Math.sqrt(dx*dx+dy*dy); pinchScale0=userScale;
+      if(drawing){drawing=false;activeCvs=null;drawLastPt=null;}
+      if(snapStart){removeSnapRect(wrap);snapStart=null;snapSnapshot=null;activeCvs=null;}
+      return;
+    }
+    pinchDist0=null;
+    e.preventDefault(); e.stopPropagation();
+    onStart(e.touches[0].clientX,e.touches[0].clientY);
+  },{passive:false});
+  cv.addEventListener('touchmove',function(e){
+    if(e.touches.length>=2&&pinchDist0!==null){
+      e.preventDefault(); e.stopPropagation();
+      var dx=e.touches[0].clientX-e.touches[1].clientX;
+      var dy=e.touches[0].clientY-e.touches[1].clientY;
+      setUserScale(pinchScale0*(Math.sqrt(dx*dx+dy*dy)/pinchDist0));
+      return;
+    }
+    if(activeCvs!==cv) return;
+    e.preventDefault();
+    onMove(e.touches[0].clientX,e.touches[0].clientY);
+  },{passive:false});
+  cv.addEventListener('touchend',function(e){
+    if(pinchDist0!==null&&e.touches.length<2){pinchDist0=null;pinchScale0=null;return;}
+    if(activeCvs!==cv) return;
+    var t=e.changedTouches[0]; onEnd(t.clientX,t.clientY);
+  },{passive:true});
+  cv.addEventListener('touchcancel',function(e){
+    pinchDist0=null;pinchScale0=null;
+    if(activeCvs!==cv) return;
+    var t=e.changedTouches[0]; onEnd(t.clientX,t.clientY);
+  },{passive:true});
   // Mouse
   cv.addEventListener('mousedown', function(e){ if(tool==='none') return; e.preventDefault(); onStart(e.clientX,e.clientY); });
   cv.addEventListener('mousemove', function(e){ onMove(e.clientX,e.clientY); });
