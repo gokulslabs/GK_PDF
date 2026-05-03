@@ -5,7 +5,7 @@ import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 import { getPdfViewerHtml } from "@/constants/pdfHtml";
 import { useColors } from "@/hooks/useColors";
-import { AnnotationTool } from "@/types/pdf";
+import { AnnotationTool, StickyNote } from "@/types/pdf";
 
 interface SearchResult {
   page: number;
@@ -22,6 +22,10 @@ export interface PDFViewerRef {
   search: (query: string) => void;
   clearSearch: () => void;
   gotoSearchResult: (index: number) => void;
+  loadNotes: (notes: StickyNote[]) => void;
+  addNote: (note: StickyNote) => void;
+  updateNote: (id: string, color: string, text: string) => void;
+  deleteNote: (id: string) => void;
 }
 
 interface Props {
@@ -34,6 +38,8 @@ interface Props {
   onAnnotationSaved?: (page: number, data: string) => void;
   onSearchDone?: (results: SearchResult[]) => void;
   onThumbnailReady?: (page: number, dataUrl: string, w: number, h: number) => void;
+  onLongPress?: (page: number, x: number, y: number) => void;
+  onNoteTap?: (noteId: string) => void;
 }
 
 const PDFViewer = forwardRef<PDFViewerRef, Props>(
@@ -48,6 +54,8 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       onAnnotationSaved,
       onSearchDone,
       onThumbnailReady,
+      onLongPress,
+      onNoteTap,
     },
     ref
   ) => {
@@ -97,11 +105,14 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       goToPage: (page) => inject({ type: "GOTO", page }),
       setDarkMode: (dark) => inject({ type: "DARK", value: dark }),
       clearPage: (page) => inject({ type: "CLEAR", page }),
-      restoreAnnotation: (page, data) =>
-        inject({ type: "RESTORE", page, data }),
+      restoreAnnotation: (page, data) => inject({ type: "RESTORE", page, data }),
       search: (query) => inject({ type: "SEARCH", query }),
       clearSearch: () => inject({ type: "SEARCH_CLEAR" }),
       gotoSearchResult: (index) => inject({ type: "SEARCH_GOTO", index }),
+      loadNotes: (notes) => inject({ type: "LOAD_NOTES", notes }),
+      addNote: (note) => inject({ type: "ADD_NOTE", note }),
+      updateNote: (id, color, text) => inject({ type: "UPDATE_NOTE", id, color, text }),
+      deleteNote: (id) => inject({ type: "DELETE_NOTE", id }),
     }));
 
     function handleMessage(e: WebViewMessageEvent) {
@@ -117,11 +128,9 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           case "LOADED":
             setLoading(false);
             onLoaded?.(msg.pages);
-            Object.entries(pendingAnnotations.current).forEach(
-              ([page, data]) => {
-                inject({ type: "RESTORE", page: parseInt(page), data });
-              }
-            );
+            Object.entries(pendingAnnotations.current).forEach(([page, data]) => {
+              inject({ type: "RESTORE", page: parseInt(page), data });
+            });
             break;
           case "PAGE":
             onPageChange?.(msg.page);
@@ -135,6 +144,12 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           case "THUMB":
             onThumbnailReady?.(msg.page, msg.data, msg.w, msg.h);
             break;
+          case "LONG_PRESS":
+            onLongPress?.(msg.page, msg.x, msg.y);
+            break;
+          case "NOTE_TAP":
+            onNoteTap?.(msg.id);
+            break;
           case "ERROR":
             setError(msg.message);
             setLoading(false);
@@ -147,14 +162,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
     if (error) {
       return (
         <View style={[styles.center, { backgroundColor: colors.background }]}>
-          <Text
-            style={{
-              color: "#EF4444",
-              textAlign: "center",
-              padding: 24,
-              fontSize: 14,
-            }}
-          >
+          <Text style={{ color: "#EF4444", textAlign: "center", padding: 24, fontSize: 14 }}>
             {error}
           </Text>
         </View>
@@ -181,12 +189,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           />
         ) : null}
         {loading && (
-          <View
-            style={[
-              styles.loader,
-              { backgroundColor: darkMode ? "#1C1C1E" : "#E8E8E8" },
-            ]}
-          >
+          <View style={[styles.loader, { backgroundColor: darkMode ? "#1C1C1E" : "#E8E8E8" }]}>
             <ActivityIndicator size="large" color="#3B82F6" />
           </View>
         )}
@@ -200,11 +203,7 @@ PDFViewer.displayName = "PDFViewer";
 const styles = StyleSheet.create({
   container: { flex: 1 },
   webview: { flex: 1, backgroundColor: "transparent" },
-  loader: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  loader: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 });
 

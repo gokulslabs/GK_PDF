@@ -17,17 +17,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnnotationToolbar from "@/components/AnnotationToolbar";
+import NoteModal from "@/components/NoteModal";
 import PDFViewer, { PDFViewerRef } from "@/components/PDFViewer";
 import PageIndicator from "@/components/PageIndicator";
 import ThumbnailStrip from "@/components/ThumbnailStrip";
 import { useLibrary } from "@/context/LibraryContext";
 import { useColors } from "@/hooks/useColors";
-import { AnnotationTool } from "@/types/pdf";
+import { AnnotationTool, StickyNote } from "@/types/pdf";
 
-interface SearchResult {
-  page: number;
-  count: number;
-}
+interface SearchResult { page: number; count: number; }
 
 const STRIP_H = 108;
 
@@ -39,14 +37,14 @@ export default function ViewerScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
 
-  const { getFileById, toggleFavorite, updateProgress, saveAnnotation } =
+  const { getFileById, toggleFavorite, updateProgress, saveAnnotation, addNote, updateNote, deleteNote } =
     useLibrary();
   const file = getFileById(id ?? "");
 
   const pdfRef = useRef<PDFViewerRef>(null);
   const searchInputRef = useRef<TextInput>(null);
 
-  // Reader state
+  // Reader
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [showToolbar, setShowToolbar] = useState(false);
@@ -59,13 +57,21 @@ export default function ViewerScreen() {
   // Thumbnails
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
 
-  // Search state
+  // Search
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchResultIdx, setSearchResultIdx] = useState(0);
   const [searchPending, setSearchPending] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Notes
+  const [noteModalVisible, setNoteModalVisible] = useState(false);
+  const [noteModalEditing, setNoteModalEditing] = useState(false);
+  const pendingNotePos = useRef<{ page: number; x: number; y: number } | null>(null);
+  const activeNoteId = useRef<string | null>(null);
+  const [noteInitialText, setNoteInitialText] = useState("");
+  const [noteInitialColor, setNoteInitialColor] = useState("#FFEB3B");
 
   useEffect(() => {
     if (file?.lastPage && file.lastPage > 1) {
@@ -74,14 +80,14 @@ export default function ViewerScreen() {
     }
   }, []);
 
-  // ── Chrome ──────────────────────────────────────────────────────────────
+  // ── Chrome ─────────────────────────────────────────────────────────────
   const toggleChrom = useCallback(() => {
     const toValue = chromVisible ? 0 : 1;
     Animated.timing(chromAnim, { toValue, duration: 200, useNativeDriver: true }).start();
     setChromVisible((v) => !v);
   }, [chromVisible]);
 
-  // ── Page tracking ────────────────────────────────────────────────────────
+  // ── Page ───────────────────────────────────────────────────────────────
   function handlePageChange(page: number) {
     setCurrentPage(page);
     if (file) updateProgress(file.id, page);
@@ -89,10 +95,17 @@ export default function ViewerScreen() {
 
   function handleLoaded(pages: number) {
     setTotalPages(pages);
-    if (file) updateProgress(file.id, file.lastPage || 1, pages);
+    if (file) {
+      updateProgress(file.id, file.lastPage || 1, pages);
+      // Load saved notes into WebView
+      const notesList = Object.values(file.notes);
+      if (notesList.length > 0) {
+        setTimeout(() => pdfRef.current?.loadNotes(notesList), 300);
+      }
+    }
   }
 
-  // ── Annotations ──────────────────────────────────────────────────────────
+  // ── Annotations ────────────────────────────────────────────────────────
   function handleTool(t: AnnotationTool) {
     setActiveTool(t);
     pdfRef.current?.setTool(t);
@@ -106,95 +119,136 @@ export default function ViewerScreen() {
     if (file) saveAnnotation(file.id, page, data);
   }
 
-  // ── Thumbnails ────────────────────────────────────────────────────────────
+  // ── Thumbnails ─────────────────────────────────────────────────────────
   function handleThumbnailReady(page: number, dataUrl: string) {
     setThumbnails((prev) => ({ ...prev, [page]: dataUrl }));
   }
-
   function handleThumbPageSelect(page: number) {
     pdfRef.current?.goToPage(page);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
-
   function toggleThumbs() {
     setShowThumbs((v) => !v);
     if (showToolbar) setShowToolbar(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
-  // ── Favorite ─────────────────────────────────────────────────────────────
+  // ── Favorite ───────────────────────────────────────────────────────────
   function handleFavorite() {
     if (!file) return;
     toggleFavorite(file.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }
 
-  // ── Search ───────────────────────────────────────────────────────────────
+  // ── Search ─────────────────────────────────────────────────────────────
   function openSearch() {
-    setIsSearching(true);
-    setSearchQuery("");
-    setSearchResults([]);
-    setSearchResultIdx(0);
-    setShowToolbar(false);
-    setShowThumbs(false);
+    setIsSearching(true); setSearchQuery(""); setSearchResults([]); setSearchResultIdx(0);
+    setShowToolbar(false); setShowThumbs(false);
     setTimeout(() => searchInputRef.current?.focus(), 100);
   }
-
   function closeSearch() {
-    setIsSearching(false);
-    setSearchQuery("");
-    setSearchResults([]);
-    setSearchResultIdx(0);
-    setSearchPending(false);
-    pdfRef.current?.clearSearch?.();
-    Keyboard.dismiss();
+    setIsSearching(false); setSearchQuery(""); setSearchResults([]); setSearchResultIdx(0);
+    setSearchPending(false); pdfRef.current?.clearSearch?.(); Keyboard.dismiss();
   }
-
   function handleSearchChange(text: string) {
-    setSearchQuery(text);
-    setSearchPending(true);
-    setSearchResults([]);
+    setSearchQuery(text); setSearchPending(true); setSearchResults([]);
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    if (!text.trim()) {
-      setSearchPending(false);
-      pdfRef.current?.clearSearch?.();
-      return;
-    }
-    searchDebounce.current = setTimeout(() => {
-      pdfRef.current?.search?.(text.trim());
-    }, 500);
+    if (!text.trim()) { setSearchPending(false); pdfRef.current?.clearSearch?.(); return; }
+    searchDebounce.current = setTimeout(() => pdfRef.current?.search?.(text.trim()), 500);
   }
-
   function handleSearchDone(results: SearchResult[]) {
-    setSearchResults(results);
-    setSearchResultIdx(0);
-    setSearchPending(false);
+    setSearchResults(results); setSearchResultIdx(0); setSearchPending(false);
   }
-
   function goToPrevResult() {
     if (!searchResults.length) return;
     const idx = searchResultIdx === 0 ? searchResults.length - 1 : searchResultIdx - 1;
-    setSearchResultIdx(idx);
-    pdfRef.current?.gotoSearchResult?.(idx);
+    setSearchResultIdx(idx); pdfRef.current?.gotoSearchResult?.(idx);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
-
   function goToNextResult() {
     if (!searchResults.length) return;
     const idx = (searchResultIdx + 1) % searchResults.length;
-    setSearchResultIdx(idx);
-    pdfRef.current?.gotoSearchResult?.(idx);
+    setSearchResultIdx(idx); pdfRef.current?.gotoSearchResult?.(idx);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
-  // ── Guard ─────────────────────────────────────────────────────────────────
+  // ── Notes ──────────────────────────────────────────────────────────────
+  function handleLongPress(page: number, x: number, y: number) {
+    if (!file) return;
+    pendingNotePos.current = { page, x, y };
+    activeNoteId.current = null;
+    setNoteInitialText("");
+    setNoteInitialColor("#FFEB3B");
+    setNoteModalEditing(false);
+    setNoteModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
+  function handleNoteTap(noteId: string) {
+    if (!file) return;
+    const note = file.notes[noteId];
+    if (!note) return;
+    activeNoteId.current = noteId;
+    pendingNotePos.current = null;
+    setNoteInitialText(note.text);
+    setNoteInitialColor(note.color);
+    setNoteModalEditing(true);
+    setNoteModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  async function handleNoteSave(text: string, color: string) {
+    if (!file) return;
+    setNoteModalVisible(false);
+
+    if (noteModalEditing && activeNoteId.current) {
+      // Update existing note
+      const noteId = activeNoteId.current;
+      await updateNote(file.id, noteId, text, color);
+      pdfRef.current?.updateNote?.(noteId, color, text);
+    } else if (pendingNotePos.current) {
+      // Create new note
+      const pos = pendingNotePos.current;
+      const newNote: StickyNote = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        page: pos.page,
+        x: pos.x,
+        y: pos.y,
+        color,
+        text,
+        createdAt: Date.now(),
+      };
+      await addNote(file.id, newNote);
+      pdfRef.current?.addNote?.(newNote);
+    }
+
+    activeNoteId.current = null;
+    pendingNotePos.current = null;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }
+
+  async function handleNoteDelete() {
+    if (!file || !activeNoteId.current) return;
+    setNoteModalVisible(false);
+    const noteId = activeNoteId.current;
+    await deleteNote(file.id, noteId);
+    pdfRef.current?.deleteNote?.(noteId);
+    activeNoteId.current = null;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }
+
+  function handleNoteCancel() {
+    setNoteModalVisible(false);
+    activeNoteId.current = null;
+    pendingNotePos.current = null;
+  }
+
+  // ── Guard ──────────────────────────────────────────────────────────────
   if (!file) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Feather name="alert-circle" size={40} color={colors.mutedForeground} />
-        <Text style={{ color: colors.foreground, marginTop: 12, fontSize: 16 }}>
-          File not found
-        </Text>
+        <Text style={{ color: colors.foreground, marginTop: 12, fontSize: 16 }}>File not found</Text>
         <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
           <Text style={{ color: colors.primary }}>Go back</Text>
         </TouchableOpacity>
@@ -205,30 +259,15 @@ export default function ViewerScreen() {
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
   const hasResults = searchResults.length > 0;
-  const noResults =
-    isSearching && !searchPending && searchQuery.length > 0 && !hasResults;
-
-  // Bottom stacking: thumbs + toolbar
-  const bottomExtra =
-    (showThumbs ? STRIP_H : 0) + (showToolbar ? 60 : 0) + bottomInset;
+  const noResults = isSearching && !searchPending && searchQuery.length > 0 && !hasResults;
+  const bottomExtra = (showThumbs ? STRIP_H : 0) + (showToolbar ? 60 : 0) + bottomInset;
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? "#1C1C1E" : "#E8E8E8" },
-      ]}
-    >
-      {Platform.OS !== "web" && (
-        <StatusBar barStyle="light-content" hidden={!chromVisible} />
-      )}
+    <View style={[styles.container, { backgroundColor: isDark ? "#1C1C1E" : "#E8E8E8" }]}>
+      {Platform.OS !== "web" && <StatusBar barStyle="light-content" hidden={!chromVisible} />}
 
       {/* PDF area */}
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={toggleChrom}
-        style={styles.pdfArea}
-      >
+      <TouchableOpacity activeOpacity={1} onPress={toggleChrom} style={styles.pdfArea}>
         <PDFViewer
           ref={pdfRef}
           fileUri={file.uri}
@@ -239,26 +278,17 @@ export default function ViewerScreen() {
           onAnnotationSaved={handleAnnotationSaved}
           onSearchDone={handleSearchDone}
           onThumbnailReady={handleThumbnailReady}
+          onLongPress={handleLongPress}
+          onNoteTap={handleNoteTap}
         />
       </TouchableOpacity>
 
-      {/* ── Top header ──────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <Animated.View
-        style={[
-          styles.header,
-          {
-            top: topInset,
-            opacity: chromAnim,
-            transform: [
-              {
-                translateY: chromAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-64, 0],
-                }),
-              },
-            ],
-          },
-        ]}
+        style={[styles.header, {
+          top: topInset, opacity: chromAnim,
+          transform: [{ translateY: chromAnim.interpolate({ inputRange: [0,1], outputRange: [-64,0] }) }],
+        }]}
         pointerEvents={chromVisible ? "auto" : "none"}
       >
         <TouchableOpacity
@@ -266,11 +296,7 @@ export default function ViewerScreen() {
           style={styles.headerBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Feather
-            name={isSearching ? "x" : "chevron-left"}
-            size={26}
-            color="white"
-          />
+          <Feather name={isSearching ? "x" : "chevron-left"} size={26} color="white" />
         </TouchableOpacity>
 
         {isSearching ? (
@@ -286,10 +312,7 @@ export default function ViewerScreen() {
               returnKeyType="search"
               autoCorrect={false}
               autoCapitalize="none"
-              onSubmitEditing={() => {
-                if (searchQuery.trim())
-                  pdfRef.current?.search?.(searchQuery.trim());
-              }}
+              onSubmitEditing={() => { if (searchQuery.trim()) pdfRef.current?.search?.(searchQuery.trim()); }}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => handleSearchChange("")}>
@@ -308,55 +331,32 @@ export default function ViewerScreen() {
             <TouchableOpacity onPress={openSearch} style={styles.headerBtn}>
               <Feather name="search" size={19} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={toggleThumbs}
-              style={styles.headerBtn}
-            >
-              <Feather
-                name="grid"
-                size={18}
-                color={showThumbs ? "#60A5FA" : "white"}
-              />
+            <TouchableOpacity onPress={toggleThumbs} style={styles.headerBtn}>
+              <Feather name="grid" size={18} color={showThumbs ? "#60A5FA" : "white"} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleFavorite} style={styles.headerBtn}>
-              <Feather
-                name="bookmark"
-                size={19}
-                color={file.isFavorite ? "#FBBF24" : "white"}
-              />
+              <Feather name="bookmark" size={19} color={file.isFavorite ? "#FBBF24" : "white"} />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => {
-                setShowToolbar((s) => !s);
-                if (showThumbs) setShowThumbs(false);
-              }}
+              onPress={() => { setShowToolbar((s) => !s); if (showThumbs) setShowThumbs(false); }}
               style={styles.headerBtn}
             >
-              <Feather
-                name="edit-2"
-                size={17}
-                color={showToolbar ? "#60A5FA" : "white"}
-              />
+              <Feather name="edit-2" size={17} color={showToolbar ? "#60A5FA" : "white"} />
             </TouchableOpacity>
           </View>
         )}
       </Animated.View>
 
-      {/* ── Search results bar ────────────────────────────────────────────── */}
+      {/* ── Search results bar ──────────────────────────────────────────── */}
       {isSearching && chromVisible && (
         <Animated.View
-          style={[
-            styles.searchBar,
-            { top: topInset + 56, opacity: chromAnim, backgroundColor: "rgba(0,0,0,0.75)" },
-          ]}
+          style={[styles.searchBar, { top: topInset + 56, opacity: chromAnim, backgroundColor: "rgba(0,0,0,0.75)" }]}
           pointerEvents="auto"
         >
           {searchPending ? (
             <Text style={styles.searchStatus}>Searching…</Text>
           ) : noResults ? (
-            <Text style={[styles.searchStatus, { color: "#EF4444" }]}>
-              No results found
-            </Text>
+            <Text style={[styles.searchStatus, { color: "#EF4444" }]}>No results found</Text>
           ) : hasResults ? (
             <>
               <TouchableOpacity onPress={goToPrevResult} style={styles.resultNavBtn}>
@@ -381,26 +381,16 @@ export default function ViewerScreen() {
         </Animated.View>
       )}
 
-      {/* ── Page indicator ───────────────────────────────────────────────── */}
+      {/* ── Page indicator ──────────────────────────────────────────────── */}
       {totalPages > 0 && chromVisible && !isSearching && (
-        <Animated.View
-          style={[
-            styles.pageIndicator,
-            { bottom: bottomExtra + 14, opacity: chromAnim },
-          ]}
-        >
+        <Animated.View style={[styles.pageIndicator, { bottom: bottomExtra + 14, opacity: chromAnim }]}>
           <PageIndicator current={currentPage} total={totalPages} />
         </Animated.View>
       )}
 
-      {/* ── Annotation toolbar ────────────────────────────────────────────── */}
+      {/* ── Annotation toolbar ───────────────────────────────────────────── */}
       {showToolbar && !isSearching && (
-        <View
-          style={[
-            styles.toolbar,
-            { bottom: (showThumbs ? STRIP_H : 0) + bottomInset },
-          ]}
-        >
+        <View style={[styles.toolbar, { bottom: (showThumbs ? STRIP_H : 0) + bottomInset }]}>
           <AnnotationToolbar
             activeTool={activeTool}
             activeColor={activeColor}
@@ -410,7 +400,7 @@ export default function ViewerScreen() {
         </View>
       )}
 
-      {/* ── Thumbnail strip (slides in from bottom) ───────────────────────── */}
+      {/* ── Thumbnail strip ─────────────────────────────────────────────── */}
       {totalPages > 0 && (
         <View style={[styles.thumbsWrap, { bottom: bottomInset }]}>
           <ThumbnailStrip
@@ -422,6 +412,17 @@ export default function ViewerScreen() {
           />
         </View>
       )}
+
+      {/* ── Sticky note modal ────────────────────────────────────────────── */}
+      <NoteModal
+        visible={noteModalVisible}
+        initialText={noteInitialText}
+        initialColor={noteInitialColor}
+        isEditing={noteModalEditing}
+        onSave={handleNoteSave}
+        onDelete={handleNoteDelete}
+        onCancel={handleNoteCancel}
+      />
     </View>
   );
 }
@@ -433,96 +434,36 @@ const styles = StyleSheet.create({
   backLink: { marginTop: 12, padding: 8 },
 
   header: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 56,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 2,
+    position: "absolute", left: 0, right: 0, height: 56,
+    flexDirection: "row", alignItems: "center", paddingHorizontal: 2,
     backgroundColor: "rgba(0,0,0,0.62)",
   },
-  headerBtn: {
-    width: 42,
-    height: 46,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  headerBtn: { width: 42, height: 46, alignItems: "center", justifyContent: "center" },
   headerTitle: {
-    flex: 1,
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
-    textAlign: "center",
+    flex: 1, color: "white", fontSize: 14, fontWeight: "600",
+    fontFamily: "Inter_600SemiBold", textAlign: "center",
   },
   headerActions: { flexDirection: "row", alignItems: "center" },
-
   searchInputWrap: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    marginHorizontal: 4,
-    gap: 6,
+    flex: 1, flexDirection: "row", alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 7, marginHorizontal: 4, gap: 6,
   },
   searchInput: {
-    flex: 1,
-    color: "white",
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    paddingVertical: 0,
+    flex: 1, color: "white", fontSize: 15,
+    fontFamily: "Inter_400Regular", paddingVertical: 0,
   },
 
   searchBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-    gap: 8,
+    position: "absolute", left: 0, right: 0, height: 44,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 16, gap: 8,
   },
-  searchStatus: {
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
-  searchResultCount: {
-    flex: 1,
-    color: "white",
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    textAlign: "center",
-  },
-  resultNavBtn: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 18,
-  },
+  searchStatus: { color: "rgba(255,255,255,0.65)", fontSize: 13, fontFamily: "Inter_400Regular" },
+  searchResultCount: { flex: 1, color: "white", fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "center" },
+  resultNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 18 },
 
-  pageIndicator: {
-    position: "absolute",
-    right: 16,
-  },
-
-  toolbar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-  },
-
-  thumbsWrap: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-  },
+  pageIndicator: { position: "absolute", right: 16 },
+  toolbar: { position: "absolute", left: 0, right: 0 },
+  thumbsWrap: { position: "absolute", left: 0, right: 0 },
 });

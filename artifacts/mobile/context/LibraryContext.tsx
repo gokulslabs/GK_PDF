@@ -1,23 +1,25 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
-import { Folder, PDFFile } from "@/types/pdf";
+import { Folder, PDFFile, StickyNote } from "@/types/pdf";
 
 interface LibraryContextType {
   files: PDFFile[];
   folders: Folder[];
   addFile: (
-    data: Omit<PDFFile, "id" | "createdAt" | "lastOpened" | "isFavorite" | "annotations" | "lastPage">
+    data: Omit<PDFFile, "id" | "createdAt" | "lastOpened" | "isFavorite" | "annotations" | "lastPage" | "notes">
   ) => Promise<void>;
   removeFile: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   updateProgress: (id: string, page: number, pageCount?: number) => Promise<void>;
   saveAnnotation: (fileId: string, page: number, imageData: string) => Promise<void>;
+  addNote: (fileId: string, note: StickyNote) => Promise<void>;
+  updateNote: (fileId: string, noteId: string, text: string, color: string) => Promise<void>;
+  deleteNote: (fileId: string, noteId: string) => Promise<void>;
   getFileById: (id: string) => PDFFile | undefined;
 }
 
 const LibraryContext = createContext<LibraryContextType | null>(null);
-
 const STORAGE_KEY = "@pdf_library_v1";
 
 export function LibraryProvider({ children }: { children: React.ReactNode }) {
@@ -25,30 +27,34 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const [folders, setFolders] = useState<Folder[]>([]);
 
   useEffect(() => {
-    loadLibrary();
+    load();
   }, []);
 
-  async function loadLibrary() {
+  async function load() {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
-        setFiles(data.files || []);
+        const loaded: PDFFile[] = (data.files || []).map((f: PDFFile) => ({
+          ...f,
+          notes: f.notes ?? {},
+        }));
+        setFiles(loaded);
         setFolders(data.folders || []);
       }
     } catch (_) {}
   }
 
-  async function persist(newFiles: PDFFile[], newFolders: Folder[] = folders) {
+  async function persist(nextFiles: PDFFile[], nextFolders: Folder[] = folders) {
     await AsyncStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ files: newFiles, folders: newFolders })
+      JSON.stringify({ files: nextFiles, folders: nextFolders })
     );
   }
 
   const addFile = useCallback(
     async (
-      data: Omit<PDFFile, "id" | "createdAt" | "lastOpened" | "isFavorite" | "annotations" | "lastPage">
+      data: Omit<PDFFile, "id" | "createdAt" | "lastOpened" | "isFavorite" | "annotations" | "lastPage" | "notes">
     ) => {
       const file: PDFFile = {
         ...data,
@@ -58,6 +64,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
         lastPage: 1,
         isFavorite: false,
         annotations: {},
+        notes: {},
       };
       const next = [file, ...files];
       setFiles(next);
@@ -90,12 +97,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     async (id: string, page: number, pageCount?: number) => {
       const next = files.map((f) =>
         f.id === id
-          ? {
-              ...f,
-              lastPage: page,
-              lastOpened: Date.now(),
-              ...(pageCount != null ? { pageCount } : {}),
-            }
+          ? { ...f, lastPage: page, lastOpened: Date.now(), ...(pageCount != null ? { pageCount } : {}) }
           : f
       );
       setFiles(next);
@@ -117,6 +119,47 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     [files, folders]
   );
 
+  const addNote = useCallback(
+    async (fileId: string, note: StickyNote) => {
+      const next = files.map((f) =>
+        f.id === fileId
+          ? { ...f, notes: { ...f.notes, [note.id]: note } }
+          : f
+      );
+      setFiles(next);
+      await persist(next);
+    },
+    [files, folders]
+  );
+
+  const updateNote = useCallback(
+    async (fileId: string, noteId: string, text: string, color: string) => {
+      const next = files.map((f) => {
+        if (f.id !== fileId || !f.notes[noteId]) return f;
+        return {
+          ...f,
+          notes: { ...f.notes, [noteId]: { ...f.notes[noteId], text, color } },
+        };
+      });
+      setFiles(next);
+      await persist(next);
+    },
+    [files, folders]
+  );
+
+  const deleteNote = useCallback(
+    async (fileId: string, noteId: string) => {
+      const next = files.map((f) => {
+        if (f.id !== fileId) return f;
+        const { [noteId]: _removed, ...rest } = f.notes;
+        return { ...f, notes: rest };
+      });
+      setFiles(next);
+      await persist(next);
+    },
+    [files, folders]
+  );
+
   const getFileById = useCallback(
     (id: string) => files.find((f) => f.id === id),
     [files]
@@ -132,6 +175,9 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
         toggleFavorite,
         updateProgress,
         saveAnnotation,
+        addNote,
+        updateNote,
+        deleteNote,
         getFileById,
       }}
     >

@@ -10,11 +10,22 @@ export interface PDFFile {
   folderId: string | null;
   isFavorite: boolean;
   annotations: Record<number, string>;
+  notes: Record<string, StickyNote>;
 }
 
 export interface Folder {
   id: string;
   name: string;
+  createdAt: number;
+}
+
+export interface StickyNote {
+  id: string;
+  page: number;
+  x: number;
+  y: number;
+  color: string;
+  text: string;
   createdAt: number;
 }
 
