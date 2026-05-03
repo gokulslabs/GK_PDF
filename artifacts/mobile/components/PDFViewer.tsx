@@ -7,6 +7,11 @@ import { getPdfViewerHtml } from "@/constants/pdfHtml";
 import { useColors } from "@/hooks/useColors";
 import { AnnotationTool } from "@/types/pdf";
 
+interface SearchResult {
+  page: number;
+  count: number;
+}
+
 export interface PDFViewerRef {
   setTool: (tool: AnnotationTool) => void;
   setColor: (color: string) => void;
@@ -14,6 +19,9 @@ export interface PDFViewerRef {
   setDarkMode: (dark: boolean) => void;
   clearPage: (page: number) => void;
   restoreAnnotation: (page: number, data: string) => void;
+  search: (query: string) => void;
+  clearSearch: () => void;
+  gotoSearchResult: (index: number) => void;
 }
 
 interface Props {
@@ -24,10 +32,23 @@ interface Props {
   onLoaded?: (totalPages: number) => void;
   onError?: (msg: string) => void;
   onAnnotationSaved?: (page: number, data: string) => void;
+  onSearchDone?: (results: SearchResult[]) => void;
 }
 
 const PDFViewer = forwardRef<PDFViewerRef, Props>(
-  ({ fileUri, darkMode, annotations, onPageChange, onLoaded, onError, onAnnotationSaved }, ref) => {
+  (
+    {
+      fileUri,
+      darkMode,
+      annotations,
+      onPageChange,
+      onLoaded,
+      onError,
+      onAnnotationSaved,
+      onSearchDone,
+    },
+    ref
+  ) => {
     const colors = useColors();
     const webRef = useRef<WebView>(null);
     const [loading, setLoading] = useState(true);
@@ -76,7 +97,11 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
       goToPage: (page) => inject({ type: "GOTO", page }),
       setDarkMode: (dark) => inject({ type: "DARK", value: dark }),
       clearPage: (page) => inject({ type: "CLEAR", page }),
-      restoreAnnotation: (page, data) => inject({ type: "RESTORE", page, data }),
+      restoreAnnotation: (page, data) =>
+        inject({ type: "RESTORE", page, data }),
+      search: (query) => inject({ type: "SEARCH", query }),
+      clearSearch: () => inject({ type: "SEARCH_CLEAR" }),
+      gotoSearchResult: (index) => inject({ type: "SEARCH_GOTO", index }),
     }));
 
     function handleMessage(e: WebViewMessageEvent) {
@@ -93,15 +118,20 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           case "LOADED":
             setLoading(false);
             onLoaded?.(msg.pages);
-            Object.entries(pendingAnnotations.current).forEach(([page, data]) => {
-              inject({ type: "RESTORE", page: parseInt(page), data });
-            });
+            Object.entries(pendingAnnotations.current).forEach(
+              ([page, data]) => {
+                inject({ type: "RESTORE", page: parseInt(page), data });
+              }
+            );
             break;
           case "PAGE":
             onPageChange?.(msg.page);
             break;
           case "ANNOT":
             onAnnotationSaved?.(msg.page, msg.data);
+            break;
+          case "SEARCH_DONE":
+            onSearchDone?.(msg.results ?? []);
             break;
           case "ERROR":
             setError(msg.message);
@@ -115,7 +145,14 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
     if (error) {
       return (
         <View style={[styles.center, { backgroundColor: colors.background }]}>
-          <Text style={{ color: "#EF4444", textAlign: "center", padding: 24, fontSize: 14 }}>
+          <Text
+            style={{
+              color: "#EF4444",
+              textAlign: "center",
+              padding: 24,
+              fontSize: 14,
+            }}
+          >
             {error}
           </Text>
         </View>

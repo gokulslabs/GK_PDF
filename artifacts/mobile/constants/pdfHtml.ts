@@ -44,11 +44,19 @@ export const getPdfViewerHtml = (darkMode: boolean): string => {
       box-shadow: 0 2px 16px rgba(0,0,0,${darkMode ? "0.55" : "0.18"});
       overflow: hidden;
       flex-shrink: 0;
+      transition: box-shadow 0.2s;
+    }
+    .page-wrap.search-match {
+      box-shadow: 0 0 0 2px #FBBF24, 0 2px 16px rgba(0,0,0,${darkMode ? "0.55" : "0.18"});
     }
     .pdf-cv { display: block; }
+    .srch-cv {
+      position: absolute; top: 0; left: 0;
+      pointer-events: none; z-index: 1;
+    }
     .ann-cv {
       position: absolute; top: 0; left: 0;
-      touch-action: none;
+      touch-action: none; z-index: 2;
     }
 
     #err {
@@ -80,11 +88,23 @@ var DARK = ${darkMode ? "true" : "false"};
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// ── State ──────────────────────────────────────────────────────────────────
 var pdfDoc = null, numPages = 0;
-var tool = 'none', color = '#FFEB3B';
+var tool = 'none', drawColor = '#FFEB3B';
 var drawings = {};
 var drawing = false, activeCvs = null, lastPt = null;
 
+// Text index: page → [{str, x, y, w, h}] in CSS px
+var textIndex = {};
+// Search state
+var searchResults = []; // [{page, rects:[{x,y,w,h}]}]
+var currentSearchIdx = -1;
+var currentQuery = '';
+
+// Page render meta: page → {cssW, cssH, dpr}
+var pageMeta = {};
+
+// ── RN Bridge ─────────────────────────────────────────────────────────────
 function rn(data) {
   try { window.ReactNativeWebView.postMessage(JSON.stringify(data)); } catch(e) {}
 }
@@ -93,19 +113,23 @@ function recv(raw) {
   var msg;
   try { msg = JSON.parse(raw); } catch(e) { return; }
   switch(msg.type) {
-    case 'LOAD': loadPDF(msg.data); break;
-    case 'TOOL': tool = msg.value; break;
-    case 'COLOR': color = msg.value; break;
-    case 'GOTO': goto(msg.page); break;
-    case 'DARK': applyDark(msg.value); break;
-    case 'CLEAR': clearAnnot(msg.page); break;
+    case 'LOAD':   loadPDF(msg.data);           break;
+    case 'TOOL':   tool = msg.value;            break;
+    case 'COLOR':  drawColor = msg.value;       break;
+    case 'GOTO':   goto(msg.page);              break;
+    case 'DARK':   applyDark(msg.value);        break;
+    case 'CLEAR':  clearAnnot(msg.page);        break;
     case 'RESTORE': restoreAnnot(msg.page, msg.data); break;
+    case 'SEARCH': doSearch(msg.query);         break;
+    case 'SEARCH_GOTO': gotoResult(msg.index);  break;
+    case 'SEARCH_CLEAR': clearSearch();         break;
   }
 }
 
 window.addEventListener('message', function(e) { recv(e.data); });
 document.addEventListener('message', function(e) { recv(e.data); });
 
+// ── Error ──────────────────────────────────────────────────────────────────
 function showErr(msg) {
   document.getElementById('loading').style.display = 'none';
   var el = document.getElementById('err');
@@ -114,20 +138,18 @@ function showErr(msg) {
   rn({ type: 'ERROR', message: msg });
 }
 
+// ── Load PDF ───────────────────────────────────────────────────────────────
 async function loadPDF(b64) {
   try {
     var bin = atob(b64);
     var buf = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-
     var task = pdfjsLib.getDocument({ data: buf });
     pdfDoc = await task.promise;
     numPages = pdfDoc.numPages;
-
     document.getElementById('loading').style.display = 'none';
     document.getElementById('scroll-wrap').style.display = 'block';
     rn({ type: 'LOADED', pages: numPages });
-
     await renderAll();
     setupScroll();
   } catch(e) {
@@ -135,6 +157,7 @@ async function loadPDF(b64) {
   }
 }
 
+// ── Render all pages ───────────────────────────────────────────────────────
 async function renderAll() {
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
   var maxW = window.innerWidth - 16;
@@ -151,6 +174,9 @@ async function renderPage(n, dpr, maxW) {
   var cssW = Math.round(vp.width / dpr);
   var cssH = Math.round(vp.height / dpr);
 
+  pageMeta[n] = { cssW: cssW, cssH: cssH, dpr: dpr, vp: vp };
+
+  // Wrapper
   var wrap = document.createElement('div');
   wrap.className = 'page-wrap';
   wrap.id = 'pg' + n;
@@ -158,28 +184,38 @@ async function renderPage(n, dpr, maxW) {
   wrap.style.width = cssW + 'px';
   wrap.style.height = cssH + 'px';
 
+  // PDF canvas
   var cv = document.createElement('canvas');
   cv.className = 'pdf-cv';
-  cv.width = vp.width;
-  cv.height = vp.height;
-  cv.style.width = cssW + 'px';
-  cv.style.height = cssH + 'px';
+  cv.width = vp.width; cv.height = vp.height;
+  cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
   wrap.appendChild(cv);
 
+  // Search highlight canvas
+  var sc_cv = document.createElement('canvas');
+  sc_cv.className = 'srch-cv';
+  sc_cv.width = cssW; sc_cv.height = cssH;
+  sc_cv.style.width = cssW + 'px'; sc_cv.style.height = cssH + 'px';
+  wrap.appendChild(sc_cv);
+
+  // Annotation canvas
   var av = document.createElement('canvas');
   av.className = 'ann-cv';
-  av.width = cssW;
-  av.height = cssH;
-  av.style.width = cssW + 'px';
-  av.style.height = cssH + 'px';
+  av.width = cssW; av.height = cssH;
+  av.style.width = cssW + 'px'; av.style.height = cssH + 'px';
   wrap.appendChild(av);
 
   document.getElementById('pages').appendChild(wrap);
 
+  // Render PDF
   var ctx = cv.getContext('2d');
   if (DARK) { ctx.filter = 'invert(1) hue-rotate(180deg)'; }
   await page.render({ canvasContext: ctx, viewport: vp }).promise;
 
+  // Build text index for this page
+  await buildTextIndex(n, page, vp, dpr);
+
+  // Restore saved annotation
   if (drawings[n]) {
     var img = new Image();
     img.onload = function() { av.getContext('2d').drawImage(img, 0, 0); };
@@ -189,6 +225,121 @@ async function renderPage(n, dpr, maxW) {
   setupDraw(av, n);
 }
 
+// ── Text Index ─────────────────────────────────────────────────────────────
+async function buildTextIndex(n, page, vp, dpr) {
+  try {
+    var tc = await page.getTextContent({ normalizeWhitespace: true });
+    var items = [];
+    tc.items.forEach(function(item) {
+      if (!item.str) return;
+      // Transform item from user space → canvas pixels
+      var tx = pdfjsLib.Util.transform(vp.transform, item.transform);
+      // tx[4], tx[5] = canvas position of text baseline origin
+      // Font size in canvas px = magnitude of the y-column of tx
+      var fsPx = Math.sqrt(tx[2] * tx[2] + tx[3] * tx[3]);
+      if (fsPx === 0) fsPx = Math.abs(tx[0]);
+      var wPx = item.width > 0 ? item.width * Math.abs(tx[0] / (item.transform[0] || 1)) : fsPx * item.str.length * 0.5;
+      // Convert to CSS px
+      var x = tx[4] / dpr;
+      var y = (tx[5] - fsPx) / dpr;
+      var w = wPx / dpr;
+      var h = (fsPx * 1.25) / dpr;
+      items.push({ str: item.str, x: x, y: y, w: Math.max(w, 4), h: Math.max(h, 6) });
+    });
+    textIndex[n] = items;
+  } catch(e) {
+    textIndex[n] = [];
+  }
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
+async function doSearch(query) {
+  clearSearch();
+  if (!pdfDoc || !query || query.trim() === '') {
+    rn({ type: 'SEARCH_DONE', results: [], total: 0 });
+    return;
+  }
+  currentQuery = query;
+  var lq = query.toLowerCase();
+  var results = [];
+
+  for (var n = 1; n <= numPages; n++) {
+    var items = textIndex[n] || [];
+    // Build full text and find matches in it
+    var pageItems = items.filter(function(it) {
+      return it.str.toLowerCase().indexOf(lq) !== -1;
+    });
+    // Also check concatenated text for cross-item matches
+    if (pageItems.length === 0) {
+      var fullText = items.map(function(i) { return i.str; }).join('');
+      if (fullText.toLowerCase().indexOf(lq) !== -1) {
+        // Approximate: mark all items on page
+        pageItems = items;
+      }
+    }
+
+    if (pageItems.length > 0) {
+      var rects = pageItems.map(function(it) {
+        return { x: it.x, y: it.y, w: it.w, h: it.h };
+      });
+      results.push({ page: n, count: pageItems.length, rects: rects });
+      drawSearchHighlights(n, rects);
+    }
+  }
+
+  searchResults = results;
+  rn({
+    type: 'SEARCH_DONE',
+    results: results.map(function(r) { return { page: r.page, count: r.count }; }),
+    total: results.length
+  });
+
+  // Auto-navigate to first result
+  if (results.length > 0) {
+    currentSearchIdx = 0;
+    goto(results[0].page);
+  }
+}
+
+function drawSearchHighlights(n, rects) {
+  var wrap = document.getElementById('pg' + n);
+  if (!wrap) return;
+  wrap.classList.add('search-match');
+  var sc_cv = wrap.querySelector('.srch-cv');
+  if (!sc_cv) return;
+  var ctx = sc_cv.getContext('2d');
+  ctx.clearRect(0, 0, sc_cv.width, sc_cv.height);
+  ctx.fillStyle = 'rgba(251, 191, 36, 0.38)';
+  ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
+  ctx.lineWidth = 1;
+  rects.forEach(function(r) {
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+  });
+}
+
+function clearSearch() {
+  currentQuery = '';
+  searchResults = [];
+  currentSearchIdx = -1;
+  for (var n = 1; n <= numPages; n++) {
+    var wrap = document.getElementById('pg' + n);
+    if (!wrap) continue;
+    wrap.classList.remove('search-match');
+    var sc_cv = wrap.querySelector('.srch-cv');
+    if (sc_cv) {
+      sc_cv.getContext('2d').clearRect(0, 0, sc_cv.width, sc_cv.height);
+    }
+  }
+}
+
+function gotoResult(idx) {
+  if (idx < 0 || idx >= searchResults.length) return;
+  currentSearchIdx = idx;
+  goto(searchResults[idx].page);
+}
+
+// ── Annotation Drawing ─────────────────────────────────────────────────────
 function setupDraw(cv, n) {
   var ctx = cv.getContext('2d');
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -237,13 +388,14 @@ function applyStyle(ctx) {
     ctx.lineWidth = 28; ctx.globalAlpha = 1;
   } else if (tool === 'highlight') {
     ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = color; ctx.lineWidth = 22; ctx.globalAlpha = 0.36;
+    ctx.strokeStyle = drawColor; ctx.lineWidth = 22; ctx.globalAlpha = 0.36;
   } else {
     ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.globalAlpha = 1;
+    ctx.strokeStyle = drawColor; ctx.lineWidth = 3; ctx.globalAlpha = 1;
   }
 }
 
+// ── Navigation & Utils ────────────────────────────────────────────────────
 function goto(n) {
   var el = document.getElementById('pg' + n);
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -277,6 +429,7 @@ function applyDark(v) {
   document.getElementById('scroll-wrap').style.background = v ? '#1C1C1E' : '#E8E8E8';
 }
 
+// ── Scroll Tracking ───────────────────────────────────────────────────────
 function setupScroll() {
   var sc = document.getElementById('scroll-wrap');
   var lastPage = 1; var rafId = null;
