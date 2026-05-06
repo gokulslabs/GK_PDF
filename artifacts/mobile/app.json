@@ -24,20 +24,14 @@
     "android": {
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE"
-      ]
+      ],
+      "package": "com.gokul0309.gokrishpdf"
     },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
-      "expo-font",
-      "expo-web-browser"
+      "expo-router"
     ],
     "assetBundlePatterns": [
       "assets/**"
