@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React from "react";
 import {
   Alert,
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useLibrary } from "@/context/LibraryContext";
 import { ThemePreference, useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -103,6 +103,7 @@ function ThemeSegment({ colors }: { colors: ReturnType<typeof useColors> }) {
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { clearLibrary } = useLibrary();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const btmPad = Platform.OS === "web" ? 34 : 0;
@@ -110,17 +111,14 @@ export default function SettingsScreen() {
   function handleClearLibrary() {
     Alert.alert(
       "Clear Library",
-      "This will remove all PDFs from your library. The actual files will not be deleted.",
+      "Imported PDFs and their notes will be removed from this device. The sample can be added again from the library.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Clear",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem("@pdf_library_v1");
-              Alert.alert("Done", "Library cleared. Restart the app to apply.");
-            } catch (_) {}
+          onPress: () => {
+            void clearLibrary();
           },
         },
       ]
@@ -162,14 +160,14 @@ export default function SettingsScreen() {
         <SettingRow
           icon="bookmark"
           label="Remember Position"
-          subtitle="Resumes from last page"
+          subtitle="Always on. Reopens on the last page you read"
           colors={colors}
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow
           icon="edit-2"
           label="Annotations"
-          subtitle="Draw, highlight, and add notes"
+          subtitle="Ink, highlights, text, and notes stay on this device"
           colors={colors}
         />
       </View>
@@ -192,7 +190,7 @@ export default function SettingsScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow icon="info" label="Version" subtitle="1.0.0" colors={colors} />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="file-text" label="PDF Engine" subtitle="PDF.js 3.11 via WebView" colors={colors} />
+        <SettingRow icon="file-text" label="PDF Engine" subtitle="PDF.js 3.11, stored in the app" colors={colors} />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow icon="smartphone" label="Framework" subtitle="Expo SDK 54 (React Native)" colors={colors} />
       </View>

@@ -30,6 +30,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import {
   AnnotationTool,
+  MarkupOp,
   OutlineItem,
   ShapeType,
   StampType,
@@ -48,11 +49,22 @@ export default function ViewerScreen() {
   const colors = useColors();
   const { isDark } = useTheme();
 
-  const { getFileById, toggleFavorite, updateProgress, saveAnnotation, addNote, updateNote, deleteNote } =
-    useLibrary();
+  const {
+    getFileById,
+    toggleFavorite,
+    updateProgress,
+    saveMarkup,
+    saveFormValue,
+    addNote,
+    updateNote,
+    deleteNote,
+  } = useLibrary();
   const file = getFileById(id ?? "");
 
   const pdfRef = useRef<PDFViewerRef>(null);
+  const resumedRef = useRef(false);
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileId = id ?? "";
   const searchInputRef = useRef<TextInput>(null);
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -104,7 +116,7 @@ export default function ViewerScreen() {
   // ── Notes ─────────────────────────────────────────────────────────────
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [noteModalEditing, setNoteModalEditing] = useState(false);
-  const pendingNotePos = useRef<{ page: number; x: number; y: number } | null>(null);
+  const pendingNotePos = useRef<{ page: number; x: number; y: number; pdfX?: number; pdfY?: number } | null>(null);
   const activeNoteId = useRef<string | null>(null);
   const [noteInitialText, setNoteInitialText] = useState("");
   const [noteInitialColor, setNoteInitialColor] = useState("#FFEB3B");
@@ -115,11 +127,8 @@ export default function ViewerScreen() {
   const [pwdInput, setPwdInput] = useState("");
 
   useEffect(() => {
-    if (file?.lastPage && file.lastPage > 1) {
-      const t = setTimeout(() => pdfRef.current?.goToPage(file.lastPage), 2200);
-      return () => clearTimeout(t);
-    }
-  }, []);
+    resumedRef.current = false;
+  }, [fileId]);
 
   // ── Chrome / auto-hide ────────────────────────────────────────────────
   const HIDE_DELAY = 4000;
@@ -214,17 +223,26 @@ export default function ViewerScreen() {
   // ── Page ──────────────────────────────────────────────────────────────
   function handlePageChange(page: number) {
     setCurrentPage(page);
-    if (file) updateProgress(file.id, page);
+    if (!fileId) return;
+    if (progressTimer.current) clearTimeout(progressTimer.current);
+    progressTimer.current = setTimeout(() => {
+      void updateProgress(fileId, page);
+    }, 400);
   }
   function handleLoaded(pages: number) {
     setTotalPages(pages);
-    if (file) {
-      updateProgress(file.id, file.lastPage || 1, pages);
-      const notesList = Object.values(file.notes);
-      if (notesList.length > 0) {
-        setTimeout(() => pdfRef.current?.loadNotes(notesList), 300);
-      }
+    const current = getFileById(fileId);
+    if (fileId && current && current.pageCount !== pages) {
+      void updateProgress(fileId, current.lastPage || 1, pages);
     }
+  }
+  function handleSlotsReady() {
+    const current = getFileById(fileId);
+    if (!current || resumedRef.current) return;
+    resumedRef.current = true;
+    const notesList = Object.values(current.notes ?? {});
+    if (notesList.length > 0) pdfRef.current?.loadNotes(notesList);
+    if ((current.lastPage || 1) > 1) pdfRef.current?.goToPage(current.lastPage);
   }
 
   // ── Annotations ──────────────────────────────────────────────────────
@@ -249,8 +267,11 @@ export default function ViewerScreen() {
     setStampType(t);
     pdfRef.current?.setStampType?.(t);
   }
-  function handleAnnotationSaved(page: number, data: string) {
-    if (file) saveAnnotation(file.id, page, data);
+  function handleMarkupChange(page: number, ops: MarkupOp[]) {
+    if (fileId) void saveMarkup(fileId, page, ops);
+  }
+  function handleFormChange(name: string, value: string) {
+    if (fileId && name) void saveFormValue(fileId, name, value);
   }
 
   // ── Thumbnails ────────────────────────────────────────────────────────
@@ -262,7 +283,11 @@ export default function ViewerScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
   function toggleThumbs() {
-    setShowThumbs((v) => !v);
+    setShowThumbs((v) => {
+      const next = !v;
+      if (next) pdfRef.current?.renderThumbnails();
+      return next;
+    });
     if (showToolbar) setShowToolbar(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
@@ -307,9 +332,9 @@ export default function ViewerScreen() {
   }
 
   // ── Notes ─────────────────────────────────────────────────────────────
-  function handleLongPress(page: number, x: number, y: number) {
+  function handleLongPress(page: number, x: number, y: number, pdfX?: number, pdfY?: number) {
     if (!file) return;
-    pendingNotePos.current = { page, x, y };
+    pendingNotePos.current = { page, x, y, pdfX, pdfY };
     activeNoteId.current = null;
     setNoteInitialText(""); setNoteInitialColor("#FFEB3B");
     setNoteModalEditing(false); setNoteModalVisible(true);
@@ -335,7 +360,14 @@ export default function ViewerScreen() {
       const pos = pendingNotePos.current;
       const newNote: StickyNote = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        page: pos.page, x: pos.x, y: pos.y, color, text, createdAt: Date.now(),
+        page: pos.page,
+        x: pos.x,
+        y: pos.y,
+        pdfX: pos.pdfX,
+        pdfY: pos.pdfY,
+        color,
+        text,
+        createdAt: Date.now(),
       };
       await addNote(file.id, newNote);
       pdfRef.current?.addNote?.(newNote);
@@ -366,6 +398,11 @@ export default function ViewerScreen() {
     pdfRef.current?.setPassword(pwdInput.trim());
     setPwdVisible(false); setPwdInput("");
   }
+  function cancelPassword() {
+    setPwdVisible(false);
+    setPwdInput("");
+    pdfRef.current?.cancelPassword();
+  }
 
   // ── Guard ─────────────────────────────────────────────────────────────
   if (!file) {
@@ -391,25 +428,30 @@ export default function ViewerScreen() {
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" hidden={!chromVisible} />}
 
       {/* PDF area */}
-      <TouchableOpacity activeOpacity={1} onPress={showChrom} style={styles.pdfArea}>
+      <View style={styles.pdfArea}>
         <PDFViewer
           ref={pdfRef}
           fileUri={file.uri}
           darkMode={isDark}
-          annotations={file.annotations}
+          annotations={file.annotations ?? {}}
+          markup={file.markup ?? {}}
+          formValues={file.formValues ?? {}}
           onPageChange={handlePageChange}
           onLoaded={handleLoaded}
-          onAnnotationSaved={handleAnnotationSaved}
+          onSlotsReady={handleSlotsReady}
+          onTap={showChrom}
+          onMarkupChange={handleMarkupChange}
+          onFormChange={handleFormChange}
           onSearchDone={handleSearchDone}
           onThumbnailReady={handleThumbnailReady}
-          onLongPress={handleLongPress}
+          onLongPress={(page, x, y, pdfX, pdfY) => handleLongPress(page, x, y, pdfX, pdfY)}
           onNoteTap={handleNoteTap}
           onOutlineReady={setOutlineItems}
           onScaleChange={setZoomPct}
           onPasswordRequired={handlePasswordRequired}
           onUndoAvailable={setCanUndo}
         />
-      </TouchableOpacity>
+      </View>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <Animated.View
@@ -649,7 +691,7 @@ export default function ViewerScreen() {
       />
 
       {/* ── Password dialog (native fallback) ──────────────────────────── */}
-      <Modal visible={pwdVisible} transparent animationType="fade" onRequestClose={() => setPwdVisible(false)}>
+      <Modal visible={pwdVisible} transparent animationType="fade" onRequestClose={cancelPassword}>
         <View style={styles.pwdOverlay}>
           <View style={[styles.pwdBox, { backgroundColor: colors.card }]}>
             <Text style={[styles.pwdTitle, { color: colors.foreground }]}>🔒 Password Required</Text>
@@ -668,7 +710,7 @@ export default function ViewerScreen() {
               onSubmitEditing={submitPassword}
             />
             <View style={styles.pwdBtns}>
-              <TouchableOpacity onPress={() => setPwdVisible(false)} style={[styles.pwdBtn, styles.pwdBtnCancel, { borderColor: colors.border }]}>
+              <TouchableOpacity onPress={cancelPassword} style={[styles.pwdBtn, styles.pwdBtnCancel, { borderColor: colors.border }]}>
                 <Text style={{ color: colors.mutedForeground, fontWeight: "600" }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={submitPassword} style={[styles.pwdBtn, { backgroundColor: colors.primary }]}>

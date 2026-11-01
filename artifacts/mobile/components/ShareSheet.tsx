@@ -12,9 +12,11 @@ import {
 
 import { useColors } from "@/hooks/useColors";
 import { PDFFile } from "@/types/pdf";
+import { annotatedPageNumbers } from "@/utils/flattenPdf";
 import {
   copyAnnotationSummary,
   exportAnnotationPdf,
+  shareAnnotatedPdf,
   sharePdfFile,
 } from "@/utils/shareUtils";
 
@@ -28,10 +30,16 @@ interface Action {
 
 const ACTIONS: Action[] = [
   {
+    id: "share_annotated",
+    icon: "share",
+    title: "Share annotated PDF",
+    subtitle: "Send a copy with highlights, ink, text, and notes",
+  },
+  {
     id: "share_pdf",
     icon: "share-2",
-    title: "Share PDF",
-    subtitle: "Send the original file to another app",
+    title: "Share original PDF",
+    subtitle: "Send the file without marks",
   },
   {
     id: "copy_summary",
@@ -43,7 +51,7 @@ const ACTIONS: Action[] = [
     id: "export_pdf",
     icon: "file-text",
     title: "Export Annotations as PDF",
-    subtitle: "Generate a formatted summary document",
+    subtitle: "A separate document listing notes and marked pages",
   },
 ];
 
@@ -66,7 +74,10 @@ export default function ShareSheet({ visible, file, onClose }: Props) {
   async function handleAction(id: string) {
     setBusy(id);
     try {
-      if (id === "share_pdf") {
+      if (id === "share_annotated") {
+        await shareAnnotatedPdf(file);
+        onClose();
+      } else if (id === "share_pdf") {
         await sharePdfFile(file);
         onClose();
       } else if (id === "copy_summary") {
@@ -185,7 +196,7 @@ export default function ShareSheet({ visible, file, onClose }: Props) {
           />
           <StatBadge
             icon="edit-2"
-            count={Object.keys(file.annotations).length}
+            count={annotatedPageNumbers(file).length}
             label="annotated pages"
             color="#4CAF50"
           />

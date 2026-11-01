@@ -6,19 +6,21 @@ import { Platform } from "react-native";
 import { useLibrary } from "@/context/LibraryContext";
 
 export function useSeedLibrary() {
-  const { files, loaded, addFile } = useLibrary();
+  const { files, loaded, seeded, addFile, markSeeded } = useLibrary();
   const attempted = useRef(false);
   const [seeding, setSeeding] = useState(false);
 
-  // Wait until AsyncStorage has finished loading before we decide to seed
+  // Seed once on a brand new install. Clearing the library sets seeded, so it stays empty.
   useEffect(() => {
-    if (!loaded) return;
-    if (attempted.current || files.length > 0) return;
+    if (!loaded || seeded || files.length > 0 || attempted.current) return;
     attempted.current = true;
-    seed();
-  }, [loaded, files.length]);
+    void seed().then((ok) => {
+      if (ok) void markSeeded();
+      else attempted.current = false;
+    });
+  }, [loaded, seeded, files.length, markSeeded]);
 
-  async function seed() {
+  async function seed(): Promise<boolean> {
     try {
       setSeeding(true);
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -36,12 +38,12 @@ export function useSeedLibrary() {
           pageCount: 0,
           folderId: null,
         });
-        return;
+        return true;
       }
 
       // Native: copy to document directory
       const sourceUri = asset.localUri ?? asset.uri;
-      if (!sourceUri) return;
+      if (!sourceUri) return false;
       const dir = (FileSystem.documentDirectory ?? "") + "pdfs/";
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
       const destUri = dir + "HemeOnc_Handbook.pdf";
@@ -57,9 +59,10 @@ export function useSeedLibrary() {
         pageCount: 0,
         folderId: null,
       });
+      return true;
     } catch (e) {
       console.warn("Demo PDF seed failed:", e);
-      attempted.current = false; // allow retry
+      return false;
     } finally {
       setSeeding(false);
     }

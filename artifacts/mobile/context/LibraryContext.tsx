@@ -1,23 +1,46 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
-import { Folder, PDFFile, StickyNote } from "@/types/pdf";
+import {
+  createSerialQueue,
+  emptyLibrary,
+  libraryReducer,
+  LibraryData,
+  normalizeLibrary,
+} from "@/state/libraryReducer";
+import { Folder, MarkupOp, PDFFile, StickyNote } from "@/types/pdf";
+import { deleteOwnedPdf } from "@/utils/files";
 
 interface LibraryContextType {
   files: PDFFile[];
   folders: Folder[];
   loaded: boolean;
+  seeded: boolean;
   addFile: (
-    data: Omit<PDFFile, "id" | "createdAt" | "lastOpened" | "isFavorite" | "annotations" | "lastPage" | "notes">
+    data: Omit<
+      PDFFile,
+      | "id"
+      | "createdAt"
+      | "lastOpened"
+      | "isFavorite"
+      | "annotations"
+      | "markup"
+      | "formValues"
+      | "lastPage"
+      | "notes"
+    >
   ) => Promise<void>;
   removeFile: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   updateProgress: (id: string, page: number, pageCount?: number) => Promise<void>;
-  saveAnnotation: (fileId: string, page: number, imageData: string) => Promise<void>;
+  saveMarkup: (fileId: string, page: number, ops: MarkupOp[]) => Promise<void>;
+  saveFormValue: (fileId: string, name: string, value: string) => Promise<void>;
   addNote: (fileId: string, note: StickyNote) => Promise<void>;
   updateNote: (fileId: string, noteId: string, text: string, color: string) => Promise<void>;
   deleteNote: (fileId: string, noteId: string) => Promise<void>;
+  clearLibrary: () => Promise<void>;
+  markSeeded: () => Promise<void>;
   getFileById: (id: string) => PDFFile | undefined;
 }
 
@@ -25,48 +48,58 @@ const LibraryContext = createContext<LibraryContextType | null>(null);
 const STORAGE_KEY = "@pdf_library_v1";
 
 export function LibraryProvider({ children }: { children: React.ReactNode }) {
+  const queue = useRef(createSerialQueue<LibraryData>(emptyLibrary()));
   const [files, setFiles] = useState<PDFFile[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [seeded, setSeeded] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    load();
+  const publish = useCallback(async (next: LibraryData) => {
+    queue.current.set(next);
+    setFiles(next.files);
+    setFolders(next.folders);
+    setSeeded(next.seeded);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   }, []);
 
-  async function load() {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const data = JSON.parse(raw);
-        let parsed: PDFFile[] = (data.files || []).map((f: PDFFile) => ({
-          ...f,
-          notes: f.notes ?? {},
-        }));
-        // Migration: fix demo PDF URIs stored with old expo-asset hashed URLs
+  useEffect(() => {
+    void queue.current.run(async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsed = raw ? (JSON.parse(raw) as Partial<LibraryData>) : emptyLibrary();
+        let data = normalizeLibrary(parsed);
         if (Platform.OS === "web") {
-          parsed = parsed.map((f) =>
-            f.name.includes("HemeOnc") && f.uri !== "/HemeOnc_Handbook.pdf"
-              ? { ...f, uri: "/HemeOnc_Handbook.pdf" }
-              : f
-          );
+          data = {
+            ...data,
+            files: data.files.map((file) =>
+              file.name.includes("HemeOnc") && file.uri !== "/HemeOnc_Handbook.pdf"
+                ? { ...file, uri: "/HemeOnc_Handbook.pdf" }
+                : file
+            ),
+          };
         }
-        setFiles(parsed);
-        setFolders(data.folders || []);
+        await publish(data);
+      } catch {
+        await publish(emptyLibrary());
       }
-    } catch (_) {}
-    setLoaded(true);
-  }
-
-  async function persist(nextFiles: PDFFile[], nextFolders: Folder[] = folders) {
-    await AsyncStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ files: nextFiles, folders: nextFolders })
-    );
-  }
+      setLoaded(true);
+    });
+  }, [publish]);
 
   const addFile = useCallback(
     async (
-      data: Omit<PDFFile, "id" | "createdAt" | "lastOpened" | "isFavorite" | "annotations" | "lastPage" | "notes">
+      data: Omit<
+        PDFFile,
+        | "id"
+        | "createdAt"
+        | "lastOpened"
+        | "isFavorite"
+        | "annotations"
+        | "markup"
+        | "formValues"
+        | "lastPage"
+        | "notes"
+      >
     ) => {
       const file: PDFFile = {
         ...data,
@@ -76,104 +109,108 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
         lastPage: 1,
         isFavorite: false,
         annotations: {},
+        markup: {},
+        formValues: {},
         notes: {},
       };
-      const next = [file, ...files];
-      setFiles(next);
-      await persist(next);
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "add", file }));
+      });
     },
-    [files, folders]
+    [publish]
   );
 
   const removeFile = useCallback(
     async (id: string) => {
-      const next = files.filter((f) => f.id !== id);
-      setFiles(next);
-      await persist(next);
+      await queue.current.run(async (state) => {
+        const existing = state.files.find((file) => file.id === id);
+        await publish(libraryReducer(state, { type: "remove", id }));
+        if (existing) await deleteOwnedPdf(existing.uri);
+      });
     },
-    [files, folders]
+    [publish]
   );
 
   const toggleFavorite = useCallback(
     async (id: string) => {
-      const next = files.map((f) =>
-        f.id === id ? { ...f, isFavorite: !f.isFavorite } : f
-      );
-      setFiles(next);
-      await persist(next);
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "toggleFavorite", id }));
+      });
     },
-    [files, folders]
+    [publish]
   );
 
   const updateProgress = useCallback(
     async (id: string, page: number, pageCount?: number) => {
-      const next = files.map((f) =>
-        f.id === id
-          ? { ...f, lastPage: page, lastOpened: Date.now(), ...(pageCount != null ? { pageCount } : {}) }
-          : f
-      );
-      setFiles(next);
-      await persist(next);
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "progress", id, page, pageCount }));
+      });
     },
-    [files, folders]
+    [publish]
   );
 
-  const saveAnnotation = useCallback(
-    async (fileId: string, page: number, imageData: string) => {
-      const next = files.map((f) =>
-        f.id === fileId
-          ? { ...f, annotations: { ...f.annotations, [page]: imageData } }
-          : f
-      );
-      setFiles(next);
-      await persist(next);
+  const saveMarkup = useCallback(
+    async (fileId: string, page: number, ops: MarkupOp[]) => {
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "markup", id: fileId, page, ops }));
+      });
     },
-    [files, folders]
+    [publish]
+  );
+
+  const saveFormValue = useCallback(
+    async (fileId: string, name: string, value: string) => {
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "form", id: fileId, name, value }));
+      });
+    },
+    [publish]
   );
 
   const addNote = useCallback(
     async (fileId: string, note: StickyNote) => {
-      const next = files.map((f) =>
-        f.id === fileId
-          ? { ...f, notes: { ...f.notes, [note.id]: note } }
-          : f
-      );
-      setFiles(next);
-      await persist(next);
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "addNote", id: fileId, note }));
+      });
     },
-    [files, folders]
+    [publish]
   );
 
   const updateNote = useCallback(
     async (fileId: string, noteId: string, text: string, color: string) => {
-      const next = files.map((f) => {
-        if (f.id !== fileId || !f.notes[noteId]) return f;
-        return {
-          ...f,
-          notes: { ...f.notes, [noteId]: { ...f.notes[noteId], text, color } },
-        };
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "updateNote", id: fileId, noteId, text, color }));
       });
-      setFiles(next);
-      await persist(next);
     },
-    [files, folders]
+    [publish]
   );
 
   const deleteNote = useCallback(
     async (fileId: string, noteId: string) => {
-      const next = files.map((f) => {
-        if (f.id !== fileId) return f;
-        const { [noteId]: _removed, ...rest } = f.notes;
-        return { ...f, notes: rest };
+      await queue.current.run(async (state) => {
+        await publish(libraryReducer(state, { type: "deleteNote", id: fileId, noteId }));
       });
-      setFiles(next);
-      await persist(next);
     },
-    [files, folders]
+    [publish]
   );
 
+  const clearLibrary = useCallback(async () => {
+    await queue.current.run(async (state) => {
+      const uris = state.files.map((file) => file.uri);
+      await publish(libraryReducer(state, { type: "clear" }));
+      await Promise.all(uris.map((uri) => deleteOwnedPdf(uri)));
+    });
+  }, [publish]);
+
+  const markSeeded = useCallback(async () => {
+    await queue.current.run(async (state) => {
+      if (state.seeded) return;
+      await publish(libraryReducer(state, { type: "markSeeded" }));
+    });
+  }, [publish]);
+
   const getFileById = useCallback(
-    (id: string) => files.find((f) => f.id === id),
+    (id: string) => files.find((file) => file.id === id),
     [files]
   );
 
@@ -183,14 +220,18 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
         files,
         folders,
         loaded,
+        seeded,
         addFile,
         removeFile,
         toggleFavorite,
         updateProgress,
-        saveAnnotation,
+        saveMarkup,
+        saveFormValue,
         addNote,
         updateNote,
         deleteNote,
+        clearLibrary,
+        markSeeded,
         getFileById,
       }}
     >
