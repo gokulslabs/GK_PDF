@@ -334,7 +334,7 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           />
         ) : null}
         {loading && (
-          <View style={[styles.loader, { backgroundColor: darkMode ? "#1A0A0A" : "#FFF5F5" }]} pointerEvents="none">
+          <View style={[styles.loader, { backgroundColor: "#EFEFEF" }]} pointerEvents="none">
             <ActivityIndicator size="large" color="#DC2626" />
           </View>
         )}
@@ -347,7 +347,7 @@ PDFViewer.displayName = "PDFViewer";
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  webview: { flex: 1, backgroundColor: "transparent" },
+  webview: { flex: 1, backgroundColor: "#EFEFEF" },
   loader: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 });
