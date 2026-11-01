@@ -30,7 +30,7 @@ interface LibraryContextType {
       | "lastPage"
       | "notes"
     >
-  ) => Promise<void>;
+  ) => Promise<string>;
   removeFile: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   updateProgress: (id: string, page: number, pageCount?: number) => Promise<void>;
@@ -116,6 +116,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       await queue.current.run(async (state) => {
         await publish(libraryReducer(state, { type: "add", file }));
       });
+      return file.id;
     },
     [publish]
   );

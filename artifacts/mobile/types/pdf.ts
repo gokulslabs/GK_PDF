@@ -2,6 +2,8 @@ export interface PDFFile {
   id: string;
   name: string;
   uri: string;
+  /** Content URI this copy was opened from, such as a Drive document. */
+  sourceUri?: string;
   size: number;
   pageCount: number;
   lastOpened: number;

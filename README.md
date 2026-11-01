@@ -116,6 +116,8 @@ Imports that start with `@/` are resolved by `babel-plugin-module-resolver` in `
 
 `MainActivity` uses `singleTop` and does not restore screen fragments. The system file picker would otherwise send the app back to the home screen after a PDF was already copied into the library. The manifest also declares `VIBRATE`, and haptic calls ignore a missing vibrator.
 
+The same activity accepts View and Send for `application/pdf`. From Drive or the Files app, Open with includes PDF Reader. The file is copied into the library and opened. Opening the same Drive link again reuses that copy.
+
 ## Reader behavior
 
 The viewer is a WebView. `PDFViewer` reads the file as base64 and posts it into the page from `pdfHtml.ts`. PDF.js runs on the main thread with the vendored worker, so the app does not download a script at open time.

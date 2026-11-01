@@ -29,6 +29,13 @@ const textOp: MarkupOp = {
 };
 
 describe("libraryReducer", () => {
+  test("keeps the source address of a file opened from another app", () => {
+    const saved = file({ sourceUri: "content://com.google.android.apps.docs.storage/document/1" });
+    assert.equal(saved.sourceUri, "content://com.google.android.apps.docs.storage/document/1");
+    const again = normalizeFile(saved);
+    assert.equal(again.sourceUri, saved.sourceUri);
+  });
+
   test("progress update keeps markup written earlier", () => {
     const start = normalizeLibrary({ files: [file()], folders: [], seeded: true });
     const withMarkup = libraryReducer(start, {

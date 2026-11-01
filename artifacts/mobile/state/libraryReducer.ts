@@ -38,6 +38,7 @@ export function normalizeFile(raw: Partial<PDFFile> & Pick<PDFFile, "id" | "name
     id: raw.id,
     name: raw.name,
     uri: raw.uri,
+    sourceUri: typeof raw.sourceUri === "string" ? raw.sourceUri : undefined,
     size: raw.size ?? 0,
     pageCount: raw.pageCount ?? 0,
     lastOpened: raw.lastOpened ?? raw.createdAt ?? Date.now(),

@@ -9,6 +9,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import palette from "@/constants/colors";
 import { LibraryProvider } from "@/context/LibraryContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import OpenIncomingPdf from "@/components/OpenIncomingPdf";
+import { navigationRef } from "@/navigation/navigationRef";
 import { RootNavigator } from "@/navigation/RootNavigator";
 
 const queryClient = new QueryClient();
@@ -42,7 +44,8 @@ const darkNav: Theme = {
 function Navigation() {
   const { isDark } = useTheme();
   return (
-    <NavigationContainer theme={isDark ? darkNav : lightNav}>
+    <NavigationContainer ref={navigationRef} theme={isDark ? darkNav : lightNav}>
+      <OpenIncomingPdf />
       <RootNavigator />
     </NavigationContainer>
   );
