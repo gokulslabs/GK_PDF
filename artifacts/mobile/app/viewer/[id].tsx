@@ -50,7 +50,7 @@ export default function ViewerScreen() {
   const id = route.params.id;
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
 
   const {
     getFileById,
@@ -505,6 +505,13 @@ export default function ViewerScreen() {
 
         {!isSearching && (
           <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={toggleTheme}
+              style={styles.headerBtn}
+              accessibilityLabel={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              <Feather name={isDark ? "sun" : "moon"} size={18} color="white" />
+            </TouchableOpacity>
             {/* Outline button — only show if PDF has outline */}
             {outlineItems.length > 0 && (
               <TouchableOpacity onPress={openOutline} style={styles.headerBtn}>

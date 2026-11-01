@@ -14,6 +14,7 @@ interface ThemeContextType {
   preference: ThemePreference;
   isDark: boolean;
   setPreference: (p: ThemePreference) => Promise<void>;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
@@ -39,8 +40,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEY, p);
   }, []);
 
+  const toggleTheme = useCallback(() => {
+    const next: ThemePreference = isDark ? "light" : "dark";
+    setPreferenceState(next);
+    void AsyncStorage.setItem(STORAGE_KEY, next);
+  }, [isDark]);
+
   return (
-    <ThemeContext.Provider value={{ preference, isDark, setPreference }}>
+    <ThemeContext.Provider value={{ preference, isDark, setPreference, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

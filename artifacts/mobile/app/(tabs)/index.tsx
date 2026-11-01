@@ -19,6 +19,7 @@ import EmptyState from "@/components/EmptyState";
 import FileCard from "@/components/FileCard";
 import SearchBar from "@/components/SearchBar";
 import { useLibrary } from "@/context/LibraryContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { useSeedLibrary } from "@/hooks/useSeedLibrary";
 import type { RootStackParamList } from "@/navigation/types";
@@ -30,6 +31,7 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { files, addFile, removeFile, toggleFavorite } = useLibrary();
+  const { isDark, toggleTheme } = useTheme();
   const { seeding, seed } = useSeedLibrary();
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
@@ -112,6 +114,17 @@ export default function LibraryScreen() {
               Library
             </Text>
           </View>
+          <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={[styles.themeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            accessibilityLabel={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.foreground} />
+            <Text style={[styles.themeBtnText, { color: colors.foreground }]}>
+              {isDark ? "Light" : "Dark"}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={handleImport}
             style={[
@@ -133,6 +146,7 @@ export default function LibraryScreen() {
               {importing ? "Importing…" : "Import PDF"}
             </Text>
           </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -278,6 +292,24 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     fontWeight: "700",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  themeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  themeBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   importBtn: {
     flexDirection: "row",

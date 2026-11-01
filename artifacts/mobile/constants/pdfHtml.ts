@@ -354,7 +354,7 @@ async function renderPage(n, token){
   fl.style.pointerEvents=tool==="none"?"auto":"none";
   clip.appendChild(fl);
   var ctx=pdfCv.getContext("2d");
-  ctx.filter=DARK?"invert(1) hue-rotate(180deg)":"none";
+  ctx.filter="none";
   await page.render({canvasContext:ctx, viewport:vp}).promise;
   if(token!==layoutToken){ rendered[n]=false; return; }
   slot.classList.add("ready");
@@ -368,19 +368,10 @@ async function renderPage(n, token){
 async function applyDark(v){
   DARK=!!v;
   var bg=DARK?"#1C1C1E":"#E8E8E8";
+  document.documentElement.style.background=bg;
   document.body.style.background=bg;
-  var token=layoutToken;
-  for(var n=1;n<=numPages;n++){
-    if(!rendered[n]||token!==layoutToken) continue;
-    var slot=document.getElementById("pg"+n);
-    var cv=slot&&slot.querySelector(".pdf-cv");
-    var meta=pageVP[n];
-    if(!cv||!meta) continue;
-    var page=await pdfDoc.getPage(n);
-    var ctx=cv.getContext("2d");
-    ctx.filter=DARK?"invert(1) hue-rotate(180deg)":"none";
-    await page.render({canvasContext:ctx, viewport:meta.vp}).promise;
-  }
+  var loading=document.getElementById("loading");
+  if(loading) loading.style.background=bg;
 }
 async function setUserScale(v){
   var next=clampScale(v);
