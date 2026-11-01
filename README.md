@@ -2,7 +2,7 @@
 
 A bare React Native 0.81 app for reading PDFs, marking them up, and sharing a flattened copy. It does not use Expo.
 
-The Android package id is `com.pdfreader`. The home-screen name is PDF Reader. The icon is the violet GK mark.
+The Android package id is `com.pdfreader`. The home-screen name is PDF Reader. The icon is a red square with white GK letters.
 
 ## Install the APK
 
@@ -147,6 +147,6 @@ Haptics use the platform vibration API. There is no separate haptics native modu
 
 ## Theme and logo
 
-Light, dark, and system theme are stored under `@theme_preference`. The violet used by the GK mark is the same primary color as the UI (`#7C3AED` / `#8B5CF6`).
+Light, dark, and system theme are stored under `@theme_preference`. The GK mark is red and white. The rest of the UI still uses the violet primary (`#7C3AED` / `#8B5CF6`).
 
 Launcher icons are the mipmap files under `android/app/src/main/res`. iOS icons are in `ios/PDFReader/Images.xcassets/AppIcon.appiconset`. The source image is `assets/images/icon.png`. The iOS launch screen title is GK.
