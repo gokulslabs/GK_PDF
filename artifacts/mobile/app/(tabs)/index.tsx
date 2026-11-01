@@ -5,6 +5,7 @@ import * as Haptics from "@/utils/haptics";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -101,9 +102,16 @@ export default function LibraryScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 14 }]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            Library
-          </Text>
+          <View style={styles.brand}>
+            <Image
+              source={require("@/assets/images/icon.png")}
+              style={styles.logo}
+              accessibilityLabel="GK"
+            />
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+              Library
+            </Text>
+          </View>
           <TouchableOpacity
             onPress={handleImport}
             style={[
@@ -255,6 +263,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  brand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 1,
+  },
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
   },
   headerTitle: {
     fontSize: 32,
