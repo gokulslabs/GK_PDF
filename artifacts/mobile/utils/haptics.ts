@@ -15,16 +15,24 @@ export const NotificationFeedbackType = {
 export function impactAsync(style: string = ImpactFeedbackStyle.Light): void {
   if (Platform.OS === "web") return;
   const duration = style === "heavy" ? 30 : style === "medium" ? 18 : 10;
-  Vibration.vibrate(duration);
+  try {
+    Vibration.vibrate(duration);
+  } catch {
+    // A missing vibrator must not close the screen that just finished work.
+  }
 }
 
 export function notificationAsync(
   type: string = NotificationFeedbackType.Success
 ): void {
   if (Platform.OS === "web") return;
-  if (type === NotificationFeedbackType.Warning || type === NotificationFeedbackType.Error) {
-    Vibration.vibrate([0, 20, 50, 20]);
-    return;
+  try {
+    if (type === NotificationFeedbackType.Warning || type === NotificationFeedbackType.Error) {
+      Vibration.vibrate([0, 20, 50, 20]);
+      return;
+    }
+    Vibration.vibrate(15);
+  } catch {
+    // A missing vibrator must not close the screen that just finished work.
   }
-  Vibration.vibrate(15);
 }
