@@ -114,6 +114,8 @@ Imports that start with `@/` are resolved by `babel-plugin-module-resolver` in `
 
 `@react-native/codegen` is a direct dependency. The Android new-architecture build looks for it in this package's `node_modules`, and pnpm does not hoist it there otherwise.
 
+`MainActivity` uses `singleTop` and does not restore screen fragments. The system file picker would otherwise send the app back to the home screen after a PDF was already copied into the library. The manifest also declares `VIBRATE`, and haptic calls ignore a missing vibrator.
+
 ## Reader behavior
 
 The viewer is a WebView. `PDFViewer` reads the file as base64 and posts it into the page from `pdfHtml.ts`. PDF.js runs on the main thread with the vendored worker, so the app does not download a script at open time.
