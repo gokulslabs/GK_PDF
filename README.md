@@ -147,6 +147,6 @@ Haptics use the platform vibration API. There is no separate haptics native modu
 
 ## Theme and logo
 
-Light, dark, and system theme are stored under `@theme_preference`. Library and the reader each have a Light/Dark control. Dark mode changes the app chrome only. The PDF page stays black text on white paper. The GK mark is red and white. The rest of the UI still uses the violet primary (`#7C3AED` / `#8B5CF6`).
+The UI is red and white. Light mode uses white surfaces, near-black text, and red accents (`#DC2626`). Dark mode uses a deep red background, white text, and a brighter red accent (`#EF4444`). The preference is stored under `@theme_preference_v2` and defaults to light. Library and the reader each have a Light/Dark control. Dark mode changes the app chrome only. The PDF page stays black text on white paper. The GK mark matches the same red and white.
 
 Launcher icons are the mipmap files under `android/app/src/main/res`. iOS icons are in `ios/PDFReader/Images.xcassets/AppIcon.appiconset`. The source image is `assets/images/icon.png`. The iOS launch screen title is GK.

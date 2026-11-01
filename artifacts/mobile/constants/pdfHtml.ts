@@ -17,7 +17,7 @@ export function getPdfViewerHtml(darkMode: boolean): string {
 }
 
 function buildHtml(darkMode: boolean): string {
-  const bg = darkMode ? "#1C1C1E" : "#E8E8E8";
+  const bg = darkMode ? "#1A0A0A" : "#FFF5F5";
   const textColor = darkMode ? "#fff" : "#111";
   const spinnerBorder = darkMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
 
@@ -31,7 +31,7 @@ function buildHtml(darkMode: boolean): string {
 html,body{height:100%;overflow:hidden;background:${bg}}
 body{font-family:-apple-system,system-ui,sans-serif;color:${textColor}}
 #loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${bg};gap:14px;z-index:999}
-.spinner{width:38px;height:38px;border:3px solid ${spinnerBorder};border-top-color:#3B82F6;border-radius:50%;animation:spin .75s linear infinite}
+.spinner{width:38px;height:38px;border:3px solid ${spinnerBorder};border-top-color:#DC2626;border-radius:50%;animation:spin .75s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #scroll-wrap{height:100%;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:none}
 #scroll-wrap.single{scroll-snap-type:y mandatory}
@@ -49,16 +49,16 @@ body{font-family:-apple-system,system-ui,sans-serif;color:${textColor}}
 .srch-cv{z-index:1;pointer-events:none}
 .ann-cv{z-index:2}
 .form-layer{position:absolute;top:0;left:0;z-index:3;overflow:hidden}
-.form-field{position:absolute;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.35);border-radius:2px;font-family:Arial,sans-serif;font-size:11px;outline:none;padding:1px 3px;color:#111;resize:none;overflow:hidden}
-.form-field:focus{background:rgba(59,130,246,.13);border-color:#3B82F6}
+.form-field{position:absolute;background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.35);border-radius:2px;font-family:Arial,sans-serif;font-size:11px;outline:none;padding:1px 3px;color:#111;resize:none;overflow:hidden}
+.form-field:focus{background:rgba(220,38,38,.13);border-color:#DC2626}
 input.form-field[type="checkbox"],input.form-field[type="radio"]{width:100%;height:100%;margin:0;padding:0}
 .note-pin{position:absolute;z-index:20;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;border:2.5px solid rgba(255,255,255,.85);transform:translate(-13px,-13px);user-select:none}
-.snap-rect{position:absolute;pointer-events:none;z-index:10;border:1.5px dashed rgba(59,130,246,.85);background:rgba(59,130,246,.08)}
-.txt-overlay{position:absolute;z-index:25;background:rgba(255,255,255,.96);border:1.5px solid #3B82F6;border-radius:4px;padding:3px 6px;font-size:13px;color:#111;outline:none;min-width:80px;min-height:24px}
-.sel-handle{position:absolute;z-index:50;width:22px;height:22px;border-radius:50%;background:#3B82F6;border:2.5px solid #fff;transform:translate(-11px,-11px);touch-action:none}
+.snap-rect{position:absolute;pointer-events:none;z-index:10;border:1.5px dashed rgba(220,38,38,.85);background:rgba(220,38,38,.08)}
+.txt-overlay{position:absolute;z-index:25;background:rgba(255,255,255,.96);border:1.5px solid #DC2626;border-radius:4px;padding:3px 6px;font-size:13px;color:#111;outline:none;min-width:80px;min-height:24px}
+.sel-handle{position:absolute;z-index:50;width:22px;height:22px;border-radius:50%;background:#DC2626;border:2.5px solid #fff;transform:translate(-11px,-11px);touch-action:none}
 .sel-toolbar{position:absolute;z-index:55;background:rgba(10,13,26,.93);border-radius:11px;padding:5px 7px;display:flex;gap:5px;transform:translateX(-50%)}
 .sel-btn{border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#fff}
-.sel-btn.confirm{background:#3B82F6}
+.sel-btn.confirm{background:#DC2626}
 .sel-btn.cancel{background:rgba(255,255,255,.2)}
 #err{display:none;position:fixed;inset:0;background:${bg};flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#EF4444;text-align:center;padding:28px;font-size:14px;z-index:1000}
 </style>
@@ -367,7 +367,7 @@ async function renderPage(n, token){
 }
 async function applyDark(v){
   DARK=!!v;
-  var bg=DARK?"#1C1C1E":"#E8E8E8";
+  var bg=DARK?"#1A0A0A":"#FFF5F5";
   document.documentElement.style.background=bg;
   document.body.style.background=bg;
   var loading=document.getElementById("loading");

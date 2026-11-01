@@ -238,8 +238,8 @@ const styles = StyleSheet.create({
   },
   swatchSelected: {
     borderWidth: 3,
-    borderColor: "#3B82F6",
-    shadowColor: "#3B82F6",
+    borderColor: "#DC2626",
+    shadowColor: "#DC2626",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,

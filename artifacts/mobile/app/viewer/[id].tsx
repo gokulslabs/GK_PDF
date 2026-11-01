@@ -51,6 +51,12 @@ export default function ViewerScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { isDark, toggleTheme } = useTheme();
+  const ink = isDark ? "#FFFFFF" : "#1A1A1A";
+  const inkMuted = isDark ? "rgba(255,255,255,0.62)" : "rgba(26,26,26,0.55)";
+  const barBg = isDark ? "rgba(26,10,10,0.94)" : "rgba(255,255,255,0.97)";
+  const barLine = isDark ? "rgba(239,68,68,0.35)" : "rgba(220,38,38,0.18)";
+  const chipBg = isDark ? "rgba(220,38,38,0.22)" : "rgba(220,38,38,0.08)";
+  const chipLine = isDark ? "rgba(239,68,68,0.45)" : "rgba(220,38,38,0.28)";
 
   const {
     getFileById,
@@ -432,7 +438,9 @@ export default function ViewerScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {Platform.OS !== "web" && <StatusBar barStyle="light-content" hidden={!chromVisible} />}
+      {Platform.OS !== "web" && (
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} hidden={!chromVisible} />
+      )}
 
       {/* PDF area */}
       <View style={styles.pdfArea}>
@@ -464,6 +472,8 @@ export default function ViewerScreen() {
       <Animated.View
         style={[styles.header, {
           top: topInset, opacity: chromAnim,
+          backgroundColor: barBg,
+          borderBottomColor: barLine,
           transform: [{ translateY: chromAnim.interpolate({ inputRange: [0, 1], outputRange: [-64, 0] }) }],
         }]}
         pointerEvents={chromVisible ? "auto" : "none"}
@@ -473,19 +483,19 @@ export default function ViewerScreen() {
           style={styles.headerBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Feather name={isSearching ? "x" : "chevron-left"} size={26} color="white" />
+          <Feather name={isSearching ? "x" : "chevron-left"} size={26} color={ink} />
         </TouchableOpacity>
 
         {isSearching ? (
-          <View style={styles.searchInputWrap}>
-            <Feather name="search" size={14} color="rgba(255,255,255,0.6)" />
+          <View style={[styles.searchInputWrap, { backgroundColor: chipBg, borderColor: chipLine }]}>
+            <Feather name="search" size={14} color={inkMuted} />
             <TextInput
               ref={searchInputRef}
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: ink }]}
               value={searchQuery}
               onChangeText={handleSearchChange}
               placeholder="Search in PDF…"
-              placeholderTextColor="rgba(255,255,255,0.45)"
+              placeholderTextColor={inkMuted}
               returnKeyType="search"
               autoCorrect={false}
               autoCapitalize="none"
@@ -493,12 +503,12 @@ export default function ViewerScreen() {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => handleSearchChange("")}>
-                <Feather name="x-circle" size={14} color="rgba(255,255,255,0.5)" />
+                <Feather name="x-circle" size={14} color={inkMuted} />
               </TouchableOpacity>
             )}
           </View>
         ) : (
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={[styles.headerTitle, { color: ink }]} numberOfLines={1}>
             {file.name.replace(/\.pdf$/i, "")}
           </Text>
         )}
@@ -510,40 +520,40 @@ export default function ViewerScreen() {
               style={styles.headerBtn}
               accessibilityLabel={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
-              <Feather name={isDark ? "sun" : "moon"} size={18} color="white" />
+              <Feather name={isDark ? "sun" : "moon"} size={18} color={ink} />
             </TouchableOpacity>
             {/* Outline button — only show if PDF has outline */}
             {outlineItems.length > 0 && (
               <TouchableOpacity onPress={openOutline} style={styles.headerBtn}>
-                <Feather name="list" size={18} color={showOutline ? colors.primary : "white"} />
+                <Feather name="list" size={18} color={showOutline ? colors.primary : ink} />
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={toggleZoom} style={styles.headerBtn}>
-              <Text style={[styles.zoomBadge, showZoomControls && { color: colors.primary }]}>{zoomPct}%</Text>
+              <Text style={[styles.zoomBadge, { color: showZoomControls ? colors.primary : ink }]}>{zoomPct}%</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleRotate} style={styles.headerBtn}>
-              <Feather name="rotate-cw" size={17} color="white" />
+              <Feather name="rotate-cw" size={17} color={ink} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleViewMode} style={styles.headerBtn}>
-              <Feather name={viewMode === "continuous" ? "align-justify" : "square" } size={16} color="white" />
+              <Feather name={viewMode === "continuous" ? "align-justify" : "square" } size={16} color={ink} />
             </TouchableOpacity>
             <TouchableOpacity onPress={openSearch} style={styles.headerBtn}>
-              <Feather name="search" size={19} color="white" />
+              <Feather name="search" size={19} color={ink} />
             </TouchableOpacity>
             <TouchableOpacity onPress={toggleThumbs} style={styles.headerBtn}>
-              <Feather name="grid" size={18} color={showThumbs ? colors.primary : "white"} />
+              <Feather name="grid" size={18} color={showThumbs ? colors.primary : ink} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleFavorite} style={styles.headerBtn}>
-              <Feather name="bookmark" size={19} color={file.isFavorite ? "#FBBF24" : "white"} />
+              <Feather name="bookmark" size={19} color={file.isFavorite ? "#FBBF24" : ink} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => { setShowToolbar((s) => !s); if (showThumbs) setShowThumbs(false); }}
               style={styles.headerBtn}
             >
-              <Feather name="edit-2" size={17} color={showToolbar ? colors.primary : "white"} />
+              <Feather name="edit-2" size={17} color={showToolbar ? colors.primary : ink} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowShare(true)} style={styles.headerBtn}>
-              <Feather name="share-2" size={17} color="white" />
+              <Feather name="share-2" size={17} color={ink} />
             </TouchableOpacity>
           </View>
         )}
@@ -551,51 +561,51 @@ export default function ViewerScreen() {
 
       {/* ── Zoom controls panel ──────────────────────────────────────────── */}
       {showZoomControls && chromVisible && (
-        <Animated.View style={[styles.zoomPanel, { top: topInset + 58, opacity: chromAnim, backgroundColor: "rgba(0,0,0,0.80)" }]}>
-          <TouchableOpacity style={styles.zoomBtn} onPress={() => pdfRef.current?.zoomOut()}>
-            <Feather name="zoom-out" size={18} color="white" />
+        <Animated.View style={[styles.zoomPanel, { top: topInset + 58, opacity: chromAnim, backgroundColor: barBg, borderBottomColor: barLine }]}>
+          <TouchableOpacity style={[styles.zoomBtn, { backgroundColor: chipBg, borderColor: chipLine }]} onPress={() => pdfRef.current?.zoomOut()}>
+            <Feather name="zoom-out" size={18} color={ink} />
           </TouchableOpacity>
-          <Text style={styles.zoomText}>{zoomPct}%</Text>
-          <TouchableOpacity style={styles.zoomBtn} onPress={() => pdfRef.current?.zoomIn()}>
-            <Feather name="zoom-in" size={18} color="white" />
+          <Text style={[styles.zoomText, { color: ink }]}>{zoomPct}%</Text>
+          <TouchableOpacity style={[styles.zoomBtn, { backgroundColor: chipBg, borderColor: chipLine }]} onPress={() => pdfRef.current?.zoomIn()}>
+            <Feather name="zoom-in" size={18} color={ink} />
           </TouchableOpacity>
           <View style={styles.zoomDivider} />
-          <TouchableOpacity style={styles.zoomPresetBtn} onPress={() => pdfRef.current?.zoomFitWidth()}>
-            <Text style={styles.zoomPresetText}>Fit Width</Text>
+          <TouchableOpacity style={[styles.zoomPresetBtn, { backgroundColor: chipBg, borderColor: chipLine }]} onPress={() => pdfRef.current?.zoomFitWidth()}>
+            <Text style={[styles.zoomPresetText, { color: ink }]}>Fit Width</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.zoomPresetBtn} onPress={() => pdfRef.current?.zoomFitPage()}>
-            <Text style={styles.zoomPresetText}>Fit Page</Text>
+          <TouchableOpacity style={[styles.zoomPresetBtn, { backgroundColor: chipBg, borderColor: chipLine }]} onPress={() => pdfRef.current?.zoomFitPage()}>
+            <Text style={[styles.zoomPresetText, { color: ink }]}>Fit Page</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.zoomPresetBtn} onPress={() => pdfRef.current?.zoomActual()}>
-            <Text style={styles.zoomPresetText}>Actual</Text>
+          <TouchableOpacity style={[styles.zoomPresetBtn, { backgroundColor: chipBg, borderColor: chipLine }]} onPress={() => pdfRef.current?.zoomActual()}>
+            <Text style={[styles.zoomPresetText, { color: ink }]}>Actual</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
 
       {/* ── Search results bar ──────────────────────────────────────────── */}
       {isSearching && chromVisible && (
-        <Animated.View style={[styles.searchBar, { top: topInset + 56, opacity: chromAnim, backgroundColor: "rgba(0,0,0,0.75)" }]} pointerEvents="auto">
+        <Animated.View style={[styles.searchBar, { top: topInset + 56, opacity: chromAnim, backgroundColor: barBg, borderBottomColor: barLine }]} pointerEvents="auto">
           {searchPending ? (
-            <Text style={styles.searchStatus}>Searching…</Text>
+            <Text style={[styles.searchStatus, { color: inkMuted }]}>Searching…</Text>
           ) : noResults ? (
             <Text style={[styles.searchStatus, { color: "#EF4444" }]}>No results found</Text>
           ) : hasResults ? (
             <>
-              <TouchableOpacity onPress={goToPrevResult} style={styles.resultNavBtn}>
-                <Feather name="chevron-up" size={18} color="white" />
+              <TouchableOpacity onPress={goToPrevResult} style={[styles.resultNavBtn, { backgroundColor: chipBg, borderColor: chipLine }]}>
+                <Feather name="chevron-up" size={18} color={ink} />
               </TouchableOpacity>
-              <Text style={styles.searchResultCount}>
+              <Text style={[styles.searchResultCount, { color: ink }]}>
                 {searchResultIdx + 1} of {searchResults.length} pages{"  ·  "}
                 <Text style={{ color: colors.primary }}>
                   {searchResults[searchResultIdx]?.count ?? 0} match{(searchResults[searchResultIdx]?.count ?? 0) !== 1 ? "es" : ""}
                 </Text>
               </Text>
-              <TouchableOpacity onPress={goToNextResult} style={styles.resultNavBtn}>
-                <Feather name="chevron-down" size={18} color="white" />
+              <TouchableOpacity onPress={goToNextResult} style={[styles.resultNavBtn, { backgroundColor: chipBg, borderColor: chipLine }]}>
+                <Feather name="chevron-down" size={18} color={ink} />
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.searchStatus}>Type to search within this PDF</Text>
+            <Text style={[styles.searchStatus, { color: inkMuted }]}>Type to search within this PDF</Text>
           )}
         </Animated.View>
       )}
@@ -604,10 +614,10 @@ export default function ViewerScreen() {
       {totalPages > 0 && chromVisible && !isSearching && (
         <Animated.View style={[styles.pageIndicator, { bottom: bottomExtra + 14, opacity: chromAnim }]}>
           {showPageInput ? (
-            <View style={styles.goToPagePill}>
+            <View style={[styles.goToPagePill, { backgroundColor: barBg, borderColor: chipLine }]}>
               <TextInput
                 ref={pageInputRef}
-                style={styles.goToPageInput}
+                style={[styles.goToPageInput, { color: ink }]}
                 value={pageInputValue}
                 onChangeText={setPageInputValue}
                 keyboardType="number-pad"
@@ -616,12 +626,12 @@ export default function ViewerScreen() {
                 selectTextOnFocus
                 maxLength={6}
               />
-              <Text style={styles.goToPageSlash}>/ {totalPages}</Text>
+              <Text style={[styles.goToPageSlash, { color: inkMuted }]}>/ {totalPages}</Text>
               <TouchableOpacity onPress={submitPageInput} style={styles.goToPageBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Feather name="arrow-right" size={14} color="white" />
+                <Feather name="arrow-right" size={14} color="#FFFFFF" />
               </TouchableOpacity>
               <TouchableOpacity onPress={closePageInput} style={styles.goToPageClose} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Feather name="x" size={13} color="rgba(255,255,255,0.55)" />
+                <Feather name="x" size={13} color={inkMuted} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -747,66 +757,66 @@ const styles = StyleSheet.create({
   header: {
     position: "absolute", left: 0, right: 0, height: 56,
     flexDirection: "row", alignItems: "center", paddingHorizontal: 2,
-    backgroundColor: "rgba(11,11,15,0.90)",
+    backgroundColor: "rgba(255,255,255,0.97)",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(139,92,246,0.20)",
+    borderBottomColor: "rgba(220,38,38,0.18)",
   },
   headerBtn: { width: 38, height: 46, alignItems: "center", justifyContent: "center" },
-  headerTitle: { flex: 1, color: "white", fontSize: 13, fontWeight: "600", textAlign: "center" },
+  headerTitle: { flex: 1, color: "#1A1A1A", fontSize: 13, fontWeight: "600", textAlign: "center" },
   headerActions: { flexDirection: "row", alignItems: "center" },
-  zoomBadge: { color: "white", fontSize: 11, fontWeight: "700", minWidth: 36, textAlign: "center" },
+  zoomBadge: { color: "#1A1A1A", fontSize: 11, fontWeight: "700", minWidth: 36, textAlign: "center" },
 
   searchInputWrap: {
     flex: 1, flexDirection: "row", alignItems: "center",
-    backgroundColor: "rgba(139,92,246,0.14)", borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.35)",
+    backgroundColor: "rgba(220,38,38,0.08)", borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(220,38,38,0.28)",
     paddingHorizontal: 10, paddingVertical: 7, marginHorizontal: 4, gap: 6,
   },
-  searchInput: { flex: 1, color: "white", fontSize: 15, paddingVertical: 0 },
+  searchInput: { flex: 1, color: "#1A1A1A", fontSize: 15, paddingVertical: 0 },
 
   zoomPanel: {
     position: "absolute", left: 0, right: 0,
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     paddingHorizontal: 12, paddingVertical: 8, gap: 6,
-    backgroundColor: "rgba(11,11,15,0.92)",
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(139,92,246,0.20)",
+    backgroundColor: "rgba(255,255,255,0.97)",
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(220,38,38,0.18)",
   },
-  zoomBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(139,92,246,0.15)", borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.30)" },
-  zoomText: { color: "white", fontSize: 14, fontWeight: "700", minWidth: 44, textAlign: "center" },
-  zoomDivider: { width: 1, height: 20, backgroundColor: "rgba(139,92,246,0.30)", marginHorizontal: 4 },
-  zoomPresetBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(139,92,246,0.15)", borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.30)" },
-  zoomPresetText: { color: "white", fontSize: 11, fontWeight: "600" },
+  zoomBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(220,38,38,0.08)", borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(220,38,38,0.28)" },
+  zoomText: { color: "#1A1A1A", fontSize: 14, fontWeight: "700", minWidth: 44, textAlign: "center" },
+  zoomDivider: { width: 1, height: 20, backgroundColor: "rgba(220,38,38,0.30)", marginHorizontal: 4 },
+  zoomPresetBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(220,38,38,0.08)", borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(220,38,38,0.28)" },
+  zoomPresetText: { color: "#1A1A1A", fontSize: 11, fontWeight: "600" },
 
   searchBar: {
     position: "absolute", left: 0, right: 0, height: 44,
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     paddingHorizontal: 16, gap: 8,
-    backgroundColor: "rgba(11,11,15,0.88)",
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(139,92,246,0.18)",
+    backgroundColor: "rgba(255,255,255,0.97)",
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(220,38,38,0.18)",
   },
-  searchStatus: { color: "rgba(255,255,255,0.65)", fontSize: 13 },
-  searchResultCount: { flex: 1, color: "white", fontSize: 13, textAlign: "center" },
-  resultNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(139,92,246,0.18)", borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.35)" },
+  searchStatus: { color: "rgba(26,26,26,0.55)", fontSize: 13 },
+  searchResultCount: { flex: 1, color: "#1A1A1A", fontSize: 13, textAlign: "center" },
+  resultNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(220,38,38,0.08)", borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(220,38,38,0.28)" },
 
   pageIndicator: { position: "absolute", right: 16 },
 
   goToPagePill: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "rgba(11,11,15,0.92)",
-    borderRadius: 22, borderWidth: 1, borderColor: "rgba(139,92,246,0.55)",
+    backgroundColor: "rgba(255,255,255,0.97)",
+    borderRadius: 22, borderWidth: 1, borderColor: "rgba(220,38,38,0.45)",
     paddingHorizontal: 10, paddingVertical: 5,
-    shadowColor: "rgba(139,92,246,1)",
+    shadowColor: "rgba(220,38,38,1)",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.40, shadowRadius: 10, elevation: 6,
   },
   goToPageInput: {
-    color: "white", fontSize: 15, fontWeight: "700",
+    color: "#1A1A1A", fontSize: 15, fontWeight: "700",
     minWidth: 32, textAlign: "center", paddingVertical: 0,
   },
-  goToPageSlash: { color: "rgba(255,255,255,0.5)", fontSize: 12 },
+  goToPageSlash: { color: "rgba(26,26,26,0.55)", fontSize: 12 },
   goToPageBtn: {
     width: 26, height: 26, borderRadius: 13,
-    backgroundColor: "rgba(139,92,246,0.80)",
+    backgroundColor: "#DC2626",
     alignItems: "center", justifyContent: "center",
   },
   goToPageClose: { paddingLeft: 2 },

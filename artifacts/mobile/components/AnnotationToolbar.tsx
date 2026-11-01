@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
     paddingHorizontal: 10,
-    ...(Platform.OS === "ios" ? { shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.12, shadowRadius: 8 } : {}),
+    ...(Platform.OS === "ios" ? { shadowColor: "#DC2626", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.12, shadowRadius: 8 } : {}),
     elevation: 8,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 3, paddingRight: 4 },

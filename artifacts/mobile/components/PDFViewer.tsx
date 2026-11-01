@@ -334,8 +334,8 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
           />
         ) : null}
         {loading && (
-          <View style={[styles.loader, { backgroundColor: darkMode ? "#1C1C1E" : "#E8E8E8" }]} pointerEvents="none">
-            <ActivityIndicator size="large" color="#3B82F6" />
+          <View style={[styles.loader, { backgroundColor: darkMode ? "#1A0A0A" : "#FFF5F5" }]} pointerEvents="none">
+            <ActivityIndicator size="large" color="#DC2626" />
           </View>
         )}
       </View>
