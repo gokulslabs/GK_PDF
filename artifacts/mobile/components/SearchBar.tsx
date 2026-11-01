@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React from "react";
 import { StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
 
@@ -60,6 +60,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     paddingVertical: 0,
-    fontFamily: "Inter_400Regular",
   },
 });

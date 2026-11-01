@@ -1,65 +1,71 @@
-import { Asset } from "expo-asset";
-import * as FileSystem from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { Image, Platform } from "react-native";
+import ReactNativeBlobUtil from "react-native-blob-util";
 
 import { useLibrary } from "@/context/LibraryContext";
+import { ensureDir, fileExists, fileSize, pdfsDirectory } from "@/utils/files";
+
+const SAMPLE_NAME = "HemeOnc Handbook 2022–2023.pdf";
 
 export function useSeedLibrary() {
-  const { files, loaded, addFile } = useLibrary();
+  const { files, loaded, seeded, addFile, markSeeded } = useLibrary();
   const attempted = useRef(false);
   const [seeding, setSeeding] = useState(false);
 
-  // Wait until AsyncStorage has finished loading before we decide to seed
+  // Seed once on a brand new install. Clearing the library sets seeded, so it stays empty.
   useEffect(() => {
-    if (!loaded) return;
-    if (attempted.current || files.length > 0) return;
+    if (!loaded || seeded || files.length > 0 || attempted.current) return;
     attempted.current = true;
-    seed();
-  }, [loaded, files.length]);
+    void seed().then((ok) => {
+      if (ok) void markSeeded();
+      else attempted.current = false;
+    });
+  }, [loaded, seeded, files.length, markSeeded]);
 
-  async function seed() {
+  async function seed(): Promise<boolean> {
     try {
       setSeeding(true);
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const [asset] = await Asset.loadAsync(
-        require("@/assets/sample/HemeOnc_Handbook.pdf")
-      );
-      await asset.downloadAsync();
 
       if (Platform.OS === "web") {
-        // On web, use the static public file URL — stable across server restarts
         await addFile({
-          name: "HemeOnc Handbook 2022–2023.pdf",
+          name: SAMPLE_NAME,
           uri: "/HemeOnc_Handbook.pdf",
           size: 7_400_000,
           pageCount: 0,
           folderId: null,
         });
-        return;
+        return true;
       }
 
-      // Native: copy to document directory
-      const sourceUri = asset.localUri ?? asset.uri;
-      if (!sourceUri) return;
-      const dir = (FileSystem.documentDirectory ?? "") + "pdfs/";
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-      const destUri = dir + "HemeOnc_Handbook.pdf";
-      const info = await FileSystem.getInfoAsync(destUri);
-      if (!info.exists) {
-        await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+      const dir = pdfsDirectory();
+      await ensureDir(dir);
+      const dest = `${dir}/HemeOnc_Handbook.pdf`;
+      if (!(await fileExists(dest))) {
+        const asset = Image.resolveAssetSource(
+          // Metro bundles this PDF because assetExts includes "pdf".
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require("@/assets/sample/HemeOnc_Handbook.pdf")
+        );
+        const uri = asset?.uri;
+        if (!uri) return false;
+        if (uri.startsWith("http://") || uri.startsWith("https://")) {
+          await ReactNativeBlobUtil.config({ path: dest }).fetch("GET", uri);
+        } else {
+          await ReactNativeBlobUtil.fs.cp(uri.replace(/^file:\/\//, ""), dest);
+        }
       }
-      const updated = await FileSystem.getInfoAsync(destUri);
+      const size = await fileSize(dest);
       await addFile({
-        name: "HemeOnc Handbook 2022–2023.pdf",
-        uri: destUri,
-        size: (updated as { size?: number }).size ?? 7_400_000,
+        name: SAMPLE_NAME,
+        uri: dest,
+        size: size || 7_400_000,
         pageCount: 0,
         folderId: null,
       });
+      return true;
     } catch (e) {
       console.warn("Demo PDF seed failed:", e);
-      attempted.current = false; // allow retry
+      return false;
     } finally {
       setSeeding(false);
     }

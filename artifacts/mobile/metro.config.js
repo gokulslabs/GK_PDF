@@ -1,8 +1,19 @@
-const { getDefaultConfig } = require("expo/metro-config");
+const path = require("path");
+const { getDefaultConfig, mergeConfig } = require("@react-native/metro-config");
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, "../..");
+const defaultConfig = getDefaultConfig(projectRoot);
 
-// Allow Metro to bundle PDF files as static assets
-config.resolver.assetExts.push("pdf");
+const config = {
+  watchFolders: [workspaceRoot],
+  resolver: {
+    nodeModulesPaths: [
+      path.resolve(projectRoot, "node_modules"),
+      path.resolve(workspaceRoot, "node_modules"),
+    ],
+    assetExts: [...defaultConfig.resolver.assetExts, "pdf"],
+  },
+};
 
-module.exports = config;
+module.exports = mergeConfig(defaultConfig, config);

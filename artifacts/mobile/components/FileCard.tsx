@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -156,7 +156,6 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 14,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
     lineHeight: 19,
   },
   metaRow: {
@@ -165,7 +164,7 @@ const styles = StyleSheet.create({
     gap: 4,
     flexWrap: "wrap",
   },
-  meta: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  meta: { fontSize: 11 },
   dot: { fontSize: 11 },
   progressBg: {
     height: 3,

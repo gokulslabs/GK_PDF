@@ -1,5 +1,5 @@
-import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import Feather from "react-native-vector-icons/Feather";
+import * as Haptics from "@/utils/haptics";
 import React from "react";
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -208,12 +208,12 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
     paddingHorizontal: 10,
-    ...(Platform.OS === "ios" ? { shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.12, shadowRadius: 8 } : {}),
+    ...(Platform.OS === "ios" ? { shadowColor: "#DC2626", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.12, shadowRadius: 8 } : {}),
     elevation: 8,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 3, paddingRight: 4 },
   toolBtn: { alignItems: "center", justifyContent: "center", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 9, gap: 2, minWidth: 44 },
-  toolLabel: { fontSize: 9, fontFamily: "Inter_500Medium", fontWeight: "500" },
+  toolLabel: { fontSize: 9, fontWeight: "500" },
   undoBtn: { borderRadius: 9 },
   undoBtnDisabled: { opacity: 0.32 },
   divider: { width: 1, height: 28, marginHorizontal: 4 },
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   paletteSwatch: { width: 16, height: 16, borderRadius: 8 },
   subRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, flexWrap: "wrap" },
-  subLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginRight: 2 },
+  subLabel: { fontSize: 11, marginRight: 2 },
   subBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  subBtnLabel: { fontSize: 12, fontFamily: "Inter_500Medium", fontWeight: "500" },
+  subBtnLabel: { fontSize: 12, fontWeight: "500" },
 });

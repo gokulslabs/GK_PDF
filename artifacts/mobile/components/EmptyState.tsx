@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -49,8 +49,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 4,
     borderWidth: 1,
-    borderColor: "rgba(139,92,246,0.20)",
-    shadowColor: "rgba(139,92,246,1)",
+    borderColor: "rgba(220,38,38,0.20)",
+    shadowColor: "rgba(220,38,38,1)",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -59,13 +59,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
     textAlign: "center",
   },
   sub: {
     fontSize: 14,
     textAlign: "center",
-    fontFamily: "Inter_400Regular",
     lineHeight: 21,
   },
 });

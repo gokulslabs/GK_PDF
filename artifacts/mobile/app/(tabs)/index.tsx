@@ -1,11 +1,11 @@
-import { Feather } from "@expo/vector-icons";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
-import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import Feather from "react-native-vector-icons/Feather";
+import * as Haptics from "@/utils/haptics";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -19,15 +19,19 @@ import EmptyState from "@/components/EmptyState";
 import FileCard from "@/components/FileCard";
 import SearchBar from "@/components/SearchBar";
 import { useLibrary } from "@/context/LibraryContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { useSeedLibrary } from "@/hooks/useSeedLibrary";
+import type { RootStackParamList } from "@/navigation/types";
 import { PDFFile } from "@/types/pdf";
+import { importPdfFromPicker } from "@/utils/importPdf";
 
 export default function LibraryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { files, addFile, removeFile, toggleFavorite } = useLibrary();
+  const { isDark, toggleTheme } = useTheme();
   const { seeding, seed } = useSeedLibrary();
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
@@ -42,23 +46,13 @@ export default function LibraryScreen() {
   async function handleImport() {
     try {
       setImporting(true);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "application/pdf",
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
-
-      const asset = result.assets[0];
-      const dir = (FileSystem.documentDirectory ?? "") + "pdfs/";
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-      const filename = `${Date.now()}_${asset.name ?? "document.pdf"}`;
-      const destUri = dir + filename;
-      await FileSystem.copyAsync({ from: asset.uri, to: destUri });
+      const picked = await importPdfFromPicker();
+      if (!picked) return;
 
       await addFile({
-        name: asset.name ?? "document.pdf",
-        uri: destUri,
-        size: asset.size ?? 0,
+        name: picked.name,
+        uri: picked.uri,
+        size: picked.size,
         pageCount: 0,
         folderId: null,
       });
@@ -72,7 +66,7 @@ export default function LibraryScreen() {
   }
 
   function handleFilePress(file: PDFFile) {
-    router.push(`/viewer/${file.id}` as never);
+    navigation.navigate("Viewer", { id: file.id });
   }
 
   function handleFileLongPress(file: PDFFile) {
@@ -110,9 +104,27 @@ export default function LibraryScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 14 }]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            Library
-          </Text>
+          <View style={styles.brand}>
+            <Image
+              source={require("@/assets/images/icon.png")}
+              style={styles.logo}
+              accessibilityLabel="GK"
+            />
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+              Library
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={[styles.themeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            accessibilityLabel={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.foreground} />
+            <Text style={[styles.themeBtnText, { color: colors.foreground }]}>
+              {isDark ? "Light" : "Dark"}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={handleImport}
             style={[
@@ -134,6 +146,7 @@ export default function LibraryScreen() {
               {importing ? "Importing…" : "Import PDF"}
             </Text>
           </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -265,10 +278,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  brand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 1,
+  },
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  },
   headerTitle: {
     fontSize: 32,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  themeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  themeBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   importBtn: {
     flexDirection: "row",
@@ -282,14 +323,12 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 13,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
   },
   scroll: { flex: 1 },
   section: { marginBottom: 26 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
     marginHorizontal: 20,
     marginBottom: 12,
   },
@@ -311,7 +350,6 @@ const styles = StyleSheet.create({
   recentName: {
     fontSize: 12,
     fontWeight: "500",
-    fontFamily: "Inter_500Medium",
     lineHeight: 16,
   },
   progressMini: { height: 3, borderRadius: 2, overflow: "hidden" },
@@ -330,6 +368,5 @@ const styles = StyleSheet.create({
   sampleBtnText: {
     fontSize: 14,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
   },
 });

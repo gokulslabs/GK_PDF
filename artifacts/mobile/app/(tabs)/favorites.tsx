@@ -1,4 +1,5 @@
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React from "react";
 import {
   Platform,
@@ -13,18 +14,19 @@ import EmptyState from "@/components/EmptyState";
 import FileCard from "@/components/FileCard";
 import { useLibrary } from "@/context/LibraryContext";
 import { useColors } from "@/hooks/useColors";
+import type { RootStackParamList } from "@/navigation/types";
 import { PDFFile } from "@/types/pdf";
 
 export default function FavoritesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { files, toggleFavorite } = useLibrary();
 
   const favorites = files.filter((f) => f.isFavorite);
 
   function handlePress(file: PDFFile) {
-    router.push(`/viewer/${file.id}` as never);
+    navigation.navigate("Viewer", { id: file.id });
   }
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -69,6 +71,5 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
   },
 });
