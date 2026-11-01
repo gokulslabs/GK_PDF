@@ -1,8 +1,7 @@
-import { Feather } from "@expo/vector-icons";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
-import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import Feather from "react-native-vector-icons/Feather";
+import * as Haptics from "@/utils/haptics";
 import React, { useState } from "react";
 import {
   Alert,
@@ -21,12 +20,14 @@ import SearchBar from "@/components/SearchBar";
 import { useLibrary } from "@/context/LibraryContext";
 import { useColors } from "@/hooks/useColors";
 import { useSeedLibrary } from "@/hooks/useSeedLibrary";
+import type { RootStackParamList } from "@/navigation/types";
 import { PDFFile } from "@/types/pdf";
+import { importPdfFromPicker } from "@/utils/importPdf";
 
 export default function LibraryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { files, addFile, removeFile, toggleFavorite } = useLibrary();
   const { seeding, seed } = useSeedLibrary();
   const [search, setSearch] = useState("");
@@ -42,23 +43,13 @@ export default function LibraryScreen() {
   async function handleImport() {
     try {
       setImporting(true);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "application/pdf",
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
-
-      const asset = result.assets[0];
-      const dir = (FileSystem.documentDirectory ?? "") + "pdfs/";
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-      const filename = `${Date.now()}_${asset.name ?? "document.pdf"}`;
-      const destUri = dir + filename;
-      await FileSystem.copyAsync({ from: asset.uri, to: destUri });
+      const picked = await importPdfFromPicker();
+      if (!picked) return;
 
       await addFile({
-        name: asset.name ?? "document.pdf",
-        uri: destUri,
-        size: asset.size ?? 0,
+        name: picked.name,
+        uri: picked.uri,
+        size: picked.size,
         pageCount: 0,
         folderId: null,
       });
@@ -72,7 +63,7 @@ export default function LibraryScreen() {
   }
 
   function handleFilePress(file: PDFFile) {
-    router.push(`/viewer/${file.id}` as never);
+    navigation.navigate("Viewer", { id: file.id });
   }
 
   function handleFileLongPress(file: PDFFile) {
@@ -268,7 +259,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
   },
   importBtn: {
     flexDirection: "row",
@@ -282,14 +272,12 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 13,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
   },
   scroll: { flex: 1 },
   section: { marginBottom: 26 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
     marginHorizontal: 20,
     marginBottom: 12,
   },
@@ -311,7 +299,6 @@ const styles = StyleSheet.create({
   recentName: {
     fontSize: 12,
     fontWeight: "500",
-    fontFamily: "Inter_500Medium",
     lineHeight: 16,
   },
   progressMini: { height: 3, borderRadius: 2, overflow: "hidden" },
@@ -330,6 +317,5 @@ const styles = StyleSheet.create({
   sampleBtnText: {
     fontSize: 14,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
   },
 });

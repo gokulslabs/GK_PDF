@@ -175,10 +175,8 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
   },
   pageNum: {
     fontSize: 11,
-    fontFamily: "Inter_400Regular",
   },
 });

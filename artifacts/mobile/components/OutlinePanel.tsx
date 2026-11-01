@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React from "react";
 import {
   Animated,
@@ -117,7 +117,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
   },
   closeBtn: {
     width: 32,
@@ -142,16 +141,13 @@ const styles = StyleSheet.create({
   itemText: {
     flex: 1,
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
     lineHeight: 18,
   },
   itemTextBold: {
-    fontFamily: "Inter_600SemiBold",
     fontSize: 14,
   },
   pageNum: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
     minWidth: 24,
     textAlign: "right",
   },
@@ -164,7 +160,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
     textAlign: "center",
   },
 });

@@ -1,7 +1,7 @@
-import { Feather } from "@expo/vector-icons";
-import { reloadAppAsync } from "expo";
+import Feather from "react-native-vector-icons/Feather";
 import React, { useState } from "react";
 import {
+  DevSettings,
   Modal,
   Platform,
   Pressable,
@@ -25,13 +25,9 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
   const [isModalVisible, setIsModalVisible] = useState(false);
 
-  const handleRestart = async () => {
-    try {
-      await reloadAppAsync();
-    } catch (restartError) {
-      console.error("Failed to restart app:", restartError);
-      resetError();
-    }
+  const handleRestart = () => {
+    resetError();
+    if (__DEV__) DevSettings.reload();
   };
 
   const formatErrorDetails = (): string => {

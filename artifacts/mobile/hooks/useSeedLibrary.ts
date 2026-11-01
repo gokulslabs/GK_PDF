@@ -1,9 +1,11 @@
-import { Asset } from "expo-asset";
-import * as FileSystem from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { Image, Platform } from "react-native";
+import ReactNativeBlobUtil from "react-native-blob-util";
 
 import { useLibrary } from "@/context/LibraryContext";
+import { ensureDir, fileExists, fileSize, pdfsDirectory } from "@/utils/files";
+
+const SAMPLE_NAME = "HemeOnc Handbook 2022–2023.pdf";
 
 export function useSeedLibrary() {
   const { files, loaded, seeded, addFile, markSeeded } = useLibrary();
@@ -23,16 +25,10 @@ export function useSeedLibrary() {
   async function seed(): Promise<boolean> {
     try {
       setSeeding(true);
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const [asset] = await Asset.loadAsync(
-        require("@/assets/sample/HemeOnc_Handbook.pdf")
-      );
-      await asset.downloadAsync();
 
       if (Platform.OS === "web") {
-        // On web, use the static public file URL — stable across server restarts
         await addFile({
-          name: "HemeOnc Handbook 2022–2023.pdf",
+          name: SAMPLE_NAME,
           uri: "/HemeOnc_Handbook.pdf",
           size: 7_400_000,
           pageCount: 0,
@@ -41,21 +37,28 @@ export function useSeedLibrary() {
         return true;
       }
 
-      // Native: copy to document directory
-      const sourceUri = asset.localUri ?? asset.uri;
-      if (!sourceUri) return false;
-      const dir = (FileSystem.documentDirectory ?? "") + "pdfs/";
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-      const destUri = dir + "HemeOnc_Handbook.pdf";
-      const info = await FileSystem.getInfoAsync(destUri);
-      if (!info.exists) {
-        await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+      const dir = pdfsDirectory();
+      await ensureDir(dir);
+      const dest = `${dir}/HemeOnc_Handbook.pdf`;
+      if (!(await fileExists(dest))) {
+        const asset = Image.resolveAssetSource(
+          // Metro bundles this PDF because assetExts includes "pdf".
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require("@/assets/sample/HemeOnc_Handbook.pdf")
+        );
+        const uri = asset?.uri;
+        if (!uri) return false;
+        if (uri.startsWith("http://") || uri.startsWith("https://")) {
+          await ReactNativeBlobUtil.config({ path: dest }).fetch("GET", uri);
+        } else {
+          await ReactNativeBlobUtil.fs.cp(uri.replace(/^file:\/\//, ""), dest);
+        }
       }
-      const updated = await FileSystem.getInfoAsync(destUri);
+      const size = await fileSize(dest);
       await addFile({
-        name: "HemeOnc Handbook 2022–2023.pdf",
-        uri: destUri,
-        size: (updated as { size?: number }).size ?? 7_400_000,
+        name: SAMPLE_NAME,
+        uri: dest,
+        size: size || 7_400_000,
         pageCount: 0,
         folderId: null,
       });

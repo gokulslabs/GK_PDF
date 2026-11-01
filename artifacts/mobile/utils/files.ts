@@ -1,21 +1,51 @@
-import * as FileSystem from "expo-file-system";
+import ReactNativeBlobUtil from "react-native-blob-util";
+
+function stripFileScheme(uri: string): string {
+  return uri.replace(/^file:\/\//, "");
+}
+
+export function documentDirectory(): string {
+  return ReactNativeBlobUtil.fs.dirs.DocumentDir;
+}
+
+export function cacheDirectory(): string {
+  return ReactNativeBlobUtil.fs.dirs.CacheDir;
+}
+
+export function pdfsDirectory(): string {
+  return `${documentDirectory()}/pdfs`;
+}
+
+export async function ensureDir(dir: string): Promise<void> {
+  const path = stripFileScheme(dir);
+  const exists = await ReactNativeBlobUtil.fs.exists(path);
+  if (!exists) await ReactNativeBlobUtil.fs.mkdir(path);
+}
+
+export async function readFileBase64(uri: string): Promise<string> {
+  return ReactNativeBlobUtil.fs.readFile(stripFileScheme(uri), "base64");
+}
+
+export async function writeFileBase64(path: string, base64: string): Promise<void> {
+  await ReactNativeBlobUtil.fs.writeFile(stripFileScheme(path), base64, "base64");
+}
+
+export async function fileExists(path: string): Promise<boolean> {
+  return ReactNativeBlobUtil.fs.exists(stripFileScheme(path));
+}
+
+export async function fileSize(path: string): Promise<number> {
+  const stat = await ReactNativeBlobUtil.fs.stat(stripFileScheme(path));
+  return Number(stat.size) || 0;
+}
 
 export async function deleteOwnedPdf(uri: string): Promise<void> {
-  const root = FileSystem.documentDirectory;
-  if (!root || !uri.startsWith(root)) return;
+  const path = stripFileScheme(uri);
+  const root = documentDirectory();
+  if (!path.startsWith(root)) return;
   try {
-    await FileSystem.deleteAsync(uri, { idempotent: true });
+    await ReactNativeBlobUtil.fs.unlink(path);
   } catch {
     // The library entry is already gone. A leftover file can be cleaned up later.
   }
-}
-
-export function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunk) {
-    const end = Math.min(index + chunk, bytes.length);
-    for (let i = index; i < end; i++) binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }

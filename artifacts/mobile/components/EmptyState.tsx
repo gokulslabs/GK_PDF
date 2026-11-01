@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -59,13 +59,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
     textAlign: "center",
   },
   sub: {
     fontSize: 14,
     textAlign: "center",
-    fontFamily: "Inter_400Regular",
     lineHeight: 21,
   },
 });

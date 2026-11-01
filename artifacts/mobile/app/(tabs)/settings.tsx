@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React from "react";
 import {
   Alert,
@@ -192,7 +192,7 @@ export default function SettingsScreen() {
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow icon="file-text" label="PDF Engine" subtitle="PDF.js 3.11, stored in the app" colors={colors} />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="smartphone" label="Framework" subtitle="Expo SDK 54 (React Native)" colors={colors} />
+        <SettingRow icon="smartphone" label="Framework" subtitle="React Native 0.81" colors={colors} />
       </View>
     </ScrollView>
   );
@@ -200,9 +200,9 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 8 },
-  title: { fontSize: 32, fontWeight: "700", fontFamily: "Inter_700Bold" },
+  title: { fontSize: 32, fontWeight: "700" },
   sectionLabel: {
-    fontSize: 11, fontWeight: "600", fontFamily: "Inter_600SemiBold",
+    fontSize: 11, fontWeight: "600",
     letterSpacing: 0.8, marginHorizontal: 20, marginBottom: 8, marginTop: 24,
   },
   card: { marginHorizontal: 16, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
@@ -224,8 +224,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 3, elevation: 2,
   },
   segmentBtnBorder: {},
-  segmentLabel: { fontSize: 13, fontFamily: "Inter_500Medium", fontWeight: "500" },
-  segmentLabelActive: { fontFamily: "Inter_600SemiBold", fontWeight: "600" },
+  segmentLabel: { fontSize: 13, fontWeight: "500" },
+  segmentLabelActive: { fontWeight: "600" },
 
   row: {
     flexDirection: "row", alignItems: "center",
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   },
   rowIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   rowInfo: { flex: 1 },
-  rowLabel: { fontSize: 15, fontFamily: "Inter_500Medium", fontWeight: "500" },
-  rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  rowLabel: { fontSize: 15, fontWeight: "500" },
+  rowSub: { fontSize: 12, marginTop: 1 },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 58 },
 });

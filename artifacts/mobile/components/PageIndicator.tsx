@@ -34,7 +34,6 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.90)",
     fontSize: 12,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.5,
   },
 });

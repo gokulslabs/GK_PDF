@@ -1,18 +1,18 @@
-import * as Clipboard from "expo-clipboard";
-import * as FileSystem from "expo-file-system";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import Clipboard from "@react-native-clipboard/clipboard";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { Platform } from "react-native";
+import Share from "react-native-share";
 
 import { PDFFile } from "@/types/pdf";
+import { base64ToUint8, uint8ToBase64 } from "@/utils/base64";
+import { cacheDirectory, readFileBase64, writeFileBase64 } from "@/utils/files";
 import {
   annotatedPageNumbers,
-  escapeHtml,
   flattenAnnotatedPdf,
   hasBurnableEdits,
   markupTextLines,
+  pdfSafe,
 } from "@/utils/flattenPdf";
-import { uint8ToBase64 } from "@/utils/files";
 
 const NOTE_COLOR_NAMES: Record<string, string> = {
   "#FFEB3B": "Yellow",
@@ -34,13 +34,7 @@ async function readPdfBytes(uri: string): Promise<Uint8Array> {
     if (!response.ok) throw new Error("Could not read the PDF (" + response.status + ").");
     return new Uint8Array(await response.arrayBuffer());
   }
-  const b64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  return base64ToUint8(await readFileBase64(uri));
 }
 
 function buildSummaryText(file: PDFFile): string {
@@ -75,100 +69,90 @@ function buildSummaryText(file: PDFFile): string {
   return lines.join("\n");
 }
 
-function buildSummaryHtml(file: PDFFile): string {
-  const notes = Object.values(file.notes ?? {}).sort((a, b) => a.page - b.page);
-  const annotPages = annotatedPageNumbers(file);
-  const written = markupTextLines(file);
-  const safeName = escapeHtml(file.name.replace(/\.pdf$/i, ""));
-  const noteRows = notes
-    .map((note) => {
-      const safeText = escapeHtml(note.text);
-      const safeColor = escapeHtml(note.color);
-      return `<div class="note-card" style="border-left: 4px solid ${safeColor};">
-        <div class="note-meta">Page ${note.page} · ${escapeHtml(colorName(note.color))}</div>
-        <div class="note-text">${safeText.replace(/\n/g, "<br>")}</div>
-      </div>`;
-    })
-    .join("");
-  const writtenSection =
-    written.length > 0
-      ? `<section><h2>Text and stamps</h2><ul>${written
-          .map((line) => `<li>${escapeHtml(line)}</li>`)
-          .join("")}</ul></section>`
-      : "";
-  const inkSection =
-    annotPages.length > 0
-      ? `<section><h2>Marked pages</h2><p>${escapeHtml(annotPages.join(", "))}</p></section>`
-      : "";
-  const noAnnots =
-    notes.length === 0 && written.length === 0 && annotPages.length === 0
-      ? `<p style="color:#888;font-style:italic">No annotations added yet.</p>`
-      : "";
+function wrapLine(text: string, width: number): string[] {
+  if (text.length <= width) return [text];
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > width && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
+}
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1a1a2e; padding: 32px 24px; }
-  h1 { font-size: 22px; margin-bottom: 4px; }
-  .meta { color: #666; font-size: 13px; margin-bottom: 28px; }
-  h2 { font-size: 15px; margin-bottom: 12px; }
-  .note-card { background: #fff; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
-  .note-meta { font-size: 12px; color: #888; margin-bottom: 6px; }
-  .note-text { font-size: 14px; line-height: 1.55; }
-</style>
-</head>
-<body>
-  <h1>${safeName}</h1>
-  <p class="meta">Last read: page ${file.lastPage}</p>
-  ${noAnnots}
-  ${notes.length > 0 ? `<section><h2>Sticky notes (${notes.length})</h2>${noteRows}</section>` : ""}
-  ${writtenSection}
-  ${inkSection}
-</body>
-</html>`;
+async function summaryPdfBytes(file: PDFFile): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const margin = 48;
+  const fontSize = 11;
+  const lineHeight = 15;
+  const maxChars = 85;
+  const lines = buildSummaryText(file)
+    .split("\n")
+    .flatMap((line) => wrapLine(pdfSafe(line), maxChars));
+
+  let page = doc.addPage();
+  let y = page.getHeight() - margin;
+  for (const line of lines) {
+    if (y < margin) {
+      page = doc.addPage();
+      y = page.getHeight() - margin;
+    }
+    page.drawText(line, {
+      x: margin,
+      y,
+      size: fontSize,
+      font,
+      color: rgb(0.1, 0.1, 0.16),
+    });
+    y -= lineHeight;
+  }
+  return doc.save();
+}
+
+function isShareCancel(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /did not share|user cancelled|user canceled|cancel/i.test(message);
 }
 
 async function shareBytes(bytes: Uint8Array, fileName: string): Promise<void> {
   const safeName = fileName.replace(/[^\w.\- ]+/g, "_");
-  const root = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-  if (!root) {
-    if (Platform.OS === "web" && typeof document !== "undefined") {
-      const copy = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(copy).set(bytes);
-      const blob = new Blob([copy], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = safeName;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-    throw new Error("Sharing is not available on this device.");
+  const root = cacheDirectory();
+  if (!root) throw new Error("Sharing is not available on this device.");
+  const dest = `${root}/${safeName}`;
+  await writeFileBase64(dest, uint8ToBase64(bytes));
+  await sharePath(dest, safeName);
+}
+
+async function sharePath(path: string, fileName: string): Promise<void> {
+  const url = path.startsWith("file://")
+    ? path
+    : Platform.OS === "android"
+      ? `file://${path}`
+      : path;
+  try {
+    await Share.open({
+      url,
+      type: "application/pdf",
+      filename: fileName,
+      failOnCancel: false,
+      title: fileName,
+    });
+  } catch (error) {
+    if (isShareCancel(error)) return;
+    throw error;
   }
-  const dest = root + safeName;
-  await FileSystem.writeAsStringAsync(dest, uint8ToBase64(bytes), {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  const available = await Sharing.isAvailableAsync();
-  if (!available) throw new Error("Sharing is not available on this device.");
-  await Sharing.shareAsync(dest, {
-    mimeType: "application/pdf",
-    dialogTitle: `Share ${fileName}`,
-    UTI: "com.adobe.pdf",
-  });
 }
 
 export async function sharePdfFile(file: PDFFile): Promise<void> {
-  const available = await Sharing.isAvailableAsync();
-  if (!available) throw new Error("Sharing is not available on this device.");
-  await Sharing.shareAsync(file.uri, {
-    mimeType: "application/pdf",
-    dialogTitle: `Share ${file.name}`,
-    UTI: "com.adobe.pdf",
-  });
+  await sharePath(file.uri, file.name);
 }
 
 export async function shareAnnotatedPdf(file: PDFFile): Promise<void> {
@@ -183,17 +167,11 @@ export async function shareAnnotatedPdf(file: PDFFile): Promise<void> {
 }
 
 export async function copyAnnotationSummary(file: PDFFile): Promise<void> {
-  await Clipboard.setStringAsync(buildSummaryText(file));
+  Clipboard.setString(buildSummaryText(file));
 }
 
 export async function exportAnnotationPdf(file: PDFFile): Promise<void> {
-  const html = buildSummaryHtml(file);
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
-  const available = await Sharing.isAvailableAsync();
-  if (!available) throw new Error("Sharing is not available on this device.");
-  await Sharing.shareAsync(uri, {
-    mimeType: "application/pdf",
-    dialogTitle: "Export annotation summary",
-    UTI: "com.adobe.pdf",
-  });
+  const bytes = await summaryPdfBytes(file);
+  const name = file.name.replace(/\.pdf$/i, "") + " notes.pdf";
+  await shareBytes(bytes, name);
 }

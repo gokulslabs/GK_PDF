@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React, { useEffect, useState } from "react";
 import {
   Modal,
@@ -215,17 +215,17 @@ const styles = StyleSheet.create({
   },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 12 },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  title: { flex: 1, fontSize: 17, fontWeight: "700", fontFamily: "Inter_700Bold" },
+  title: { flex: 1, fontSize: 17, fontWeight: "700" },
 
   previewRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
   previewSwatch: { width: 52, height: 52, borderRadius: 10, borderWidth: 1.5 },
   hexWrap: { flex: 1, gap: 4 },
-  hexLabel: { fontSize: 10, fontWeight: "600", fontFamily: "Inter_600SemiBold", letterSpacing: 0.8 },
-  hexInput: { borderWidth: 1.5, borderRadius: 8, padding: 9, fontSize: 15, fontFamily: "Inter_500Medium", fontWeight: "500" },
+  hexLabel: { fontSize: 10, fontWeight: "600", letterSpacing: 0.8 },
+  hexInput: { borderWidth: 1.5, borderRadius: 8, padding: 9, fontSize: 15, fontWeight: "500" },
   applyBtn: { width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
 
   section: { marginBottom: 8 },
-  sectionLabel: { fontSize: 11, fontWeight: "600", fontFamily: "Inter_600SemiBold", letterSpacing: 0.6, marginBottom: 8 },
+  sectionLabel: { fontSize: 11, fontWeight: "600", letterSpacing: 0.6, marginBottom: 8 },
   swatchRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
 
   grid: { paddingBottom: 8 },

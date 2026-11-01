@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -146,7 +146,6 @@ export default function NoteModal({
                   numberOfLines={5}
                   textAlignVertical="top"
                   returnKeyType="default"
-                  fontFamily="Inter_400Regular"
                 />
 
                 {/* Actions */}
@@ -240,7 +239,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
   },
   closeBtn: {
     width: 32,
@@ -301,6 +299,5 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 14,
     fontWeight: "600",
-    fontFamily: "Inter_600SemiBold",
   },
 });

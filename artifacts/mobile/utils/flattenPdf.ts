@@ -14,6 +14,7 @@ import {
 } from "pdf-lib";
 
 import { MarkupOp, PDFFile, PdfRect, StampType, StickyNote } from "@/types/pdf";
+import { base64ToUint8 } from "@/utils/base64";
 
 const STAMPS: Record<StampType, { label: string; rgb: [number, number, number] }> = {
   approved: { label: "APPROVED", rgb: [0.086, 0.639, 0.29] },
@@ -240,7 +241,7 @@ function drawNote(page: PDFPage, note: StickyNote, font: PDFFont) {
 async function drawLegacy(pdf: PDFDocument, page: PDFPage, dataUrl: string) {
   const match = dataUrl.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/i);
   if (!match) return;
-  const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+  const bytes = base64ToUint8(match[2]);
   const image =
     match[1].toLowerCase() === "png" ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   const { width, height } = page.getSize();

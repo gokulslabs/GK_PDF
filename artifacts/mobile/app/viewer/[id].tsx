@@ -1,6 +1,7 @@
-import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import Feather from "react-native-vector-icons/Feather";
+import * as Haptics from "@/utils/haptics";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -28,6 +29,7 @@ import ThumbnailStrip from "@/components/ThumbnailStrip";
 import { useLibrary } from "@/context/LibraryContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
+import type { RootStackParamList } from "@/navigation/types";
 import {
   AnnotationTool,
   MarkupOp,
@@ -43,8 +45,9 @@ interface SearchResult { page: number; count: number; }
 const STRIP_H = 108;
 
 export default function ViewerScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const route = useRoute<RouteProp<RootStackParamList, "Viewer">>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const id = route.params.id;
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { isDark } = useTheme();
@@ -204,7 +207,11 @@ export default function ViewerScreen() {
     setPageInputValue(String(currentPage));
     setShowPageInput(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTimeout(() => { pageInputRef.current?.focus(); pageInputRef.current?.selectAll?.(); }, 80);
+    setTimeout(() => {
+      pageInputRef.current?.focus();
+      const length = pageInputValue.length;
+      pageInputRef.current?.setNativeProps?.({ selection: { start: 0, end: length } });
+    }, 80);
   }
   function closePageInput() {
     setShowPageInput(false);
@@ -410,7 +417,7 @@ export default function ViewerScreen() {
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Feather name="alert-circle" size={40} color={colors.mutedForeground} />
         <Text style={{ color: colors.foreground, marginTop: 12, fontSize: 16 }}>File not found</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backLink}>
           <Text style={{ color: colors.primary }}>Go back</Text>
         </TouchableOpacity>
       </View>
@@ -462,7 +469,7 @@ export default function ViewerScreen() {
         pointerEvents={chromVisible ? "auto" : "none"}
       >
         <TouchableOpacity
-          onPress={isSearching ? closeSearch : () => router.back()}
+          onPress={isSearching ? closeSearch : () => navigation.goBack()}
           style={styles.headerBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -738,9 +745,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(139,92,246,0.20)",
   },
   headerBtn: { width: 38, height: 46, alignItems: "center", justifyContent: "center" },
-  headerTitle: { flex: 1, color: "white", fontSize: 13, fontWeight: "600", fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  headerTitle: { flex: 1, color: "white", fontSize: 13, fontWeight: "600", textAlign: "center" },
   headerActions: { flexDirection: "row", alignItems: "center" },
-  zoomBadge: { color: "white", fontSize: 11, fontWeight: "700", fontFamily: "Inter_700Bold", minWidth: 36, textAlign: "center" },
+  zoomBadge: { color: "white", fontSize: 11, fontWeight: "700", minWidth: 36, textAlign: "center" },
 
   searchInputWrap: {
     flex: 1, flexDirection: "row", alignItems: "center",
@@ -748,7 +755,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.35)",
     paddingHorizontal: 10, paddingVertical: 7, marginHorizontal: 4, gap: 6,
   },
-  searchInput: { flex: 1, color: "white", fontSize: 15, fontFamily: "Inter_400Regular", paddingVertical: 0 },
+  searchInput: { flex: 1, color: "white", fontSize: 15, paddingVertical: 0 },
 
   zoomPanel: {
     position: "absolute", left: 0, right: 0,
@@ -758,10 +765,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(139,92,246,0.20)",
   },
   zoomBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(139,92,246,0.15)", borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.30)" },
-  zoomText: { color: "white", fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold", minWidth: 44, textAlign: "center" },
+  zoomText: { color: "white", fontSize: 14, fontWeight: "700", minWidth: 44, textAlign: "center" },
   zoomDivider: { width: 1, height: 20, backgroundColor: "rgba(139,92,246,0.30)", marginHorizontal: 4 },
   zoomPresetBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(139,92,246,0.15)", borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.30)" },
-  zoomPresetText: { color: "white", fontSize: 11, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
+  zoomPresetText: { color: "white", fontSize: 11, fontWeight: "600" },
 
   searchBar: {
     position: "absolute", left: 0, right: 0, height: 44,
@@ -770,8 +777,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(11,11,15,0.88)",
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(139,92,246,0.18)",
   },
-  searchStatus: { color: "rgba(255,255,255,0.65)", fontSize: 13, fontFamily: "Inter_400Regular" },
-  searchResultCount: { flex: 1, color: "white", fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "center" },
+  searchStatus: { color: "rgba(255,255,255,0.65)", fontSize: 13 },
+  searchResultCount: { flex: 1, color: "white", fontSize: 13, textAlign: "center" },
   resultNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(139,92,246,0.18)", borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(139,92,246,0.35)" },
 
   pageIndicator: { position: "absolute", right: 16 },
@@ -786,10 +793,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.40, shadowRadius: 10, elevation: 6,
   },
   goToPageInput: {
-    color: "white", fontSize: 15, fontWeight: "700", fontFamily: "Inter_700Bold",
+    color: "white", fontSize: 15, fontWeight: "700",
     minWidth: 32, textAlign: "center", paddingVertical: 0,
   },
-  goToPageSlash: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_500Medium" },
+  goToPageSlash: { color: "rgba(255,255,255,0.5)", fontSize: 12 },
   goToPageBtn: {
     width: 26, height: 26, borderRadius: 13,
     backgroundColor: "rgba(139,92,246,0.80)",
@@ -803,9 +810,9 @@ const styles = StyleSheet.create({
 
   pwdOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
   pwdBox: { borderRadius: 16, padding: 24, width: 300, gap: 14 },
-  pwdTitle: { fontSize: 17, fontWeight: "700", fontFamily: "Inter_700Bold" },
-  pwdMsg: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  pwdInput: { borderWidth: 1.5, borderRadius: 9, padding: 11, fontSize: 14, fontFamily: "Inter_400Regular" },
+  pwdTitle: { fontSize: 17, fontWeight: "700" },
+  pwdMsg: { fontSize: 13 },
+  pwdInput: { borderWidth: 1.5, borderRadius: 9, padding: 11, fontSize: 14 },
   pwdBtns: { flexDirection: "row", gap: 10, marginTop: 4 },
   pwdBtn: { flex: 1, alignItems: "center", justifyContent: "center", borderRadius: 9, paddingVertical: 11 },
   pwdBtnCancel: { borderWidth: 1.5 },

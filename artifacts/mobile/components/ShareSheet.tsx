@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import Feather from "react-native-vector-icons/Feather";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -231,7 +231,7 @@ function StatBadge({
     <View style={styles.statBadge}>
       <Feather name={icon} size={13} color={color} />
       <Text style={[styles.statText, { color: colors.mutedForeground }]}>
-        <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>
+        <Text style={{ color: colors.foreground }}>
           {count}
         </Text>
         {" "}
@@ -275,11 +275,9 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: "700",
-    fontFamily: "Inter_700Bold",
   },
   subtitle: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
     marginTop: 2,
   },
   closeBtn: {
@@ -306,12 +304,10 @@ const styles = StyleSheet.create({
   actionText: { flex: 1 },
   actionTitle: {
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
     marginBottom: 2,
   },
   actionSubtitle: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
     lineHeight: 16,
   },
   stats: {
@@ -328,7 +324,6 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
   },
   toast: {
     position: "absolute",
@@ -340,6 +335,5 @@ const styles = StyleSheet.create({
   },
   toastText: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
   },
 });

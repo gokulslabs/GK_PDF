@@ -1,4 +1,5 @@
-import * as FileSystem from "expo-file-system";
+import { uint8ToBase64 } from "@/utils/base64";
+import { readFileBase64 } from "@/utils/files";
 import React, {
   forwardRef,
   useEffect,
@@ -6,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 import { getPdfViewerHtml } from "@/constants/pdfHtml";
@@ -76,41 +77,6 @@ interface Props {
   onTap?: () => void;
 }
 
-function WebIframePDFViewer({
-  innerRef,
-  html,
-  onMsg,
-}: {
-  innerRef: React.RefObject<HTMLIFrameElement | null>;
-  html: string;
-  onMsg: (data: string) => void;
-}) {
-  const onMsgRef = useRef(onMsg);
-  onMsgRef.current = onMsg;
-
-  useEffect(() => {
-    function handler(e: MessageEvent) {
-      if (innerRef.current && e.source === innerRef.current.contentWindow) {
-        if (typeof e.data === "string") onMsgRef.current(e.data);
-      }
-    }
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [innerRef]);
-
-  return (
-    <div style={{ position: "relative", flex: 1, width: "100%", overflow: "hidden" }}>
-      <iframe
-        ref={innerRef as React.RefObject<HTMLIFrameElement>}
-        srcDoc={html}
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-        sandbox="allow-scripts allow-same-origin"
-        title="PDF Viewer"
-      />
-    </div>
-  );
-}
-
 const PDFViewer = forwardRef<PDFViewerRef, Props>(
   (
     {
@@ -139,7 +105,6 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
   ) => {
     const colors = useColors();
     const webRef = useRef<WebView>(null);
-    const iframeRef = useRef<HTMLIFrameElement | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [html, setHtml] = useState<string | null>(null);
@@ -200,23 +165,12 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
         setError(null);
         setHtml(null);
         let b64: string;
-        if (Platform.OS === "web" || fileUri.startsWith("http") || fileUri.startsWith("/")) {
+        if (fileUri.startsWith("http://") || fileUri.startsWith("https://")) {
           const response = await fetch(fileUri);
           if (!response.ok) throw new Error("Could not open PDF (" + response.status + ")");
-          const blob = await response.blob();
-          b64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              resolve(result.includes(",") ? result.split(",")[1] : result);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
+          b64 = uint8ToBase64(new Uint8Array(await response.arrayBuffer()));
         } else {
-          b64 = await FileSystem.readAsStringAsync(fileUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          b64 = await readFileBase64(fileUri);
         }
         if (myEpoch !== epoch.current) return;
         pendingB64.current = b64;
@@ -233,12 +187,8 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
 
     function inject(msg: object) {
       const payload = JSON.stringify(msg);
-      if (Platform.OS === "web") {
-        iframeRef.current?.contentWindow?.postMessage(payload, "*");
-      } else {
-        const escaped = JSON.stringify(payload);
-        webRef.current?.injectJavaScript(`recv(${escaped});true;`);
-      }
+      const escaped = JSON.stringify(payload);
+      webRef.current?.injectJavaScript(`recv(${escaped});true;`);
     }
 
     useEffect(() => {
@@ -369,23 +319,19 @@ const PDFViewer = forwardRef<PDFViewerRef, Props>(
     return (
       <View style={styles.container}>
         {html ? (
-          Platform.OS === "web" ? (
-            <WebIframePDFViewer innerRef={iframeRef} html={html} onMsg={handleMsg} />
-          ) : (
-            <WebView
-              ref={webRef}
-              source={{ html, baseUrl: "https://localhost" }}
-              style={styles.webview}
-              originWhitelist={["*"]}
-              javaScriptEnabled
-              domStorageEnabled
-              onMessage={(e: WebViewMessageEvent) => handleMsg(e.nativeEvent.data)}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-              overScrollMode="never"
-              setSupportMultipleWindows={false}
-            />
-          )
+          <WebView
+            ref={webRef}
+            source={{ html, baseUrl: "https://localhost" }}
+            style={styles.webview}
+            originWhitelist={["*"]}
+            javaScriptEnabled
+            domStorageEnabled
+            onMessage={(e: WebViewMessageEvent) => handleMsg(e.nativeEvent.data)}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            overScrollMode="never"
+            setSupportMultipleWindows={false}
+          />
         ) : null}
         {loading && (
           <View style={[styles.loader, { backgroundColor: darkMode ? "#1C1C1E" : "#E8E8E8" }]} pointerEvents="none">
